@@ -1,0 +1,39 @@
+command:
+  - ${env}
+  - ..\supergrid\venv\Scripts\python.exe
+  - ${program}
+  - --wandb
+  - --device
+  - cuda
+  - --eval_freq
+  - 1000
+  - --eval_len
+  - 1600
+  - ${args}
+
+program: gridworld.py
+method: grid
+metric:
+  name: eval_episode_reward_mean
+  goal: maximize
+parameters:
+  env_batch_size:
+    values: [16]
+  steps_per_batch:
+    values: [8]
+  train_steps:
+    values: [50000]
+  clip_epsilon:
+    values: [0.1]
+  gamma:
+    values: [0.95]
+  lmbda:
+    values: [0.9]
+  entropy_eps:
+    values: [0.001]
+  max_grad_norm:
+    values: [1.0]
+  hidden_dim:
+    values: [64]
+  lr:
+    values: [1e-3]
