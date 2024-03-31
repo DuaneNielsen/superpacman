@@ -155,7 +155,7 @@ def gen_params(batch_size=None):
         [0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],
         [0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0],
         [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0],
-        [1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1],
         [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
         [1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1],
         [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0],
@@ -299,6 +299,86 @@ class Gridworld(EnvBase):
     _set_seed = _set_seed
 
 
+class CenterPlayerTransform(ObservationTransform):
+    def __init__(self, in_keys, out_keys, size=2):
+        super().__init__(in_keys=in_keys, out_keys=out_keys)
+        self.size = size
+
+    def forward(self, tensordict):
+        return self._call(tensordict)
+
+    def _reset(self, tensordict, tensordict_reset):
+        return self._call(tensordict_reset)
+
+    def _call(self, td):
+        for in_key, out_key in zip(self.in_keys, self.out_keys):
+            N, H, W = td[in_key].shape
+            batch_range = torch.stack([torch.arange(N)]*(self.size*2+1), dim=-1)
+            x, y = [], []
+            for pos in td['player_pos']:
+                x += [torch.arange(pos[0]-self.size, pos[0] + self.size+1) % H]
+                y += [torch.arange(pos[1]-self.size, pos[1] + self.size+1) % W]
+            x, y = torch.stack(x), torch.stack(y)
+            td[out_key] = td[in_key][batch_range, x][batch_range, :, y].permute(0, 2, 1)
+        return td
+
+    @_apply_to_composite
+    def transform_observation_spec(self, observation_spec):
+        N, H, W = observation_spec.shape
+        return BoundedTensorSpec(
+            minimum=0,
+            maximum=255,
+            shape=torch.Size((N, self.size*2+1, self.size*2+1)),
+            dtype=observation_spec.dtype,
+            device=observation_spec.device
+        )
+
+
+class RGBPartialObsTransform(ObservationTransform):
+    """
+    Converts the state to a N, 3, H, W uint8 image tensor
+    Adds it to the tensordict under the key [image]
+    """
+
+    def __init__(self):
+        super().__init__(in_keys=['c_wall_tiles'], out_keys=['pixels'])
+
+    def forward(self, tensordict):
+        return self._call(tensordict)
+
+    def _reset(self, tensordict, tensordict_reset):
+        return self._call(tensordict_reset)
+
+    def _call(self, td):
+        walls = td['c_wall_tiles']
+        rewards = td['c_reward_tiles']
+        terminal = td['c_terminal_tiles']
+        device = walls.device
+
+        shape = *walls.shape, 3
+        center_x, center_y = shape[1]//2,  shape[2]//2
+        td['pixels'] = torch.zeros(shape, dtype=torch.uint8, device=device)
+        td['pixels'][walls == 1] = light_gray.to(device)
+        td['pixels'][rewards > 0] = green.to(device)
+        td['pixels'][rewards < 0] = red.to(device)
+        td['pixels'][terminal == 1] = blue.to(device)
+        td['pixels'][:, center_x, center_y] = yellow.to(device)
+        td['pixels'] = td['pixels']
+        return td
+
+    @_apply_to_composite
+    def transform_observation_spec(self, observation_spec):
+        N, H, W = observation_spec.shape
+        return BoundedTensorSpec(
+            minimum=0,
+            maximum=255,
+            shape=torch.Size((N, H, W, 3)),
+            dtype=torch.uint8,
+            device=observation_spec.device
+        )
+
+
+
 class RGBFullObsTransform(ObservationTransform):
     """
     Converts the state to a N, 3, H, W uint8 image tensor
@@ -356,18 +436,18 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cpu', help="cuda or cpu")
     parser.add_argument('--seed', type=int, default=42, help="seed (defaults 42)")
     parser.add_argument('--env_batch_size', type=int, default=16, help="number of environments")
-    parser.add_argument('--steps_per_batch', type=int, default=8, help="number of steps to take in env per batch")
-    parser.add_argument('--train_steps', type=int, default=60000, help="number of PPO updates to run")
+    parser.add_argument('--steps_per_batch', type=int, default=32, help="number of steps to take in env per batch")
+    parser.add_argument('--train_steps', type=int, default=1e6, help="number of PPO updates to run")
     parser.add_argument('--clip_epsilon', type=float, default=0.1, help="PPO clipping parameter")
-    parser.add_argument('--gamma', type=float, default=0.95, help="GAE gamma parameter")
-    parser.add_argument('--lmbda', type=float, default=0.9, help="GAE lambda parameter")
+    parser.add_argument('--gamma', type=float, default=0.99, help="GAE gamma parameter")
+    parser.add_argument('--lmbda', type=float, default=0.99, help="GAE lambda parameter")
     parser.add_argument('--entropy_eps', type=float, default=0.001, help="policy entropy bonus weight")
     parser.add_argument('--max_grad_norm', type=float, default=1.0, help="gradient clipping")
     parser.add_argument('--hidden_dim', type=int, default=64, help="hidden dim size of MLP")
     parser.add_argument('--lr', type=float, default=1e-3, help="Adam learning rate")
-    parser.add_argument('--lr_sched_step_size', type=int, default=20000, help="decay lr after this many steps")
-    parser.add_argument('--lr_sched_gamma', type=int, default=0.1, help="decay lr after this many steps")
-    parser.add_argument('--eval_freq', type=int, default=2000, help="run eval after this many training steps")
+    parser.add_argument('--lr_sched_step_size', type=int, default=1e5, help="decay lr after this many steps")
+    parser.add_argument('--lr_sched_gamma', type=int, default=0.7, help="decay lr after this many steps")
+    parser.add_argument('--eval_freq', type=int, default=5000, help="run eval after this many training steps")
     parser.add_argument('--eval_len', type=int, default=1000, help="run eval after this many training steps")
     parser.add_argument('--demo', action='store_true', help="command switch to visualize after training completes")
     parser.add_argument('--log_video', action='store_true', help='enable video logging')
@@ -417,13 +497,13 @@ if __name__ == '__main__':
         )
         env.append_transform(
             FlattenObservation(-2, -1,
-                               in_keys=["player_tiles", "wall_tiles", "reward_tiles"],
-                               out_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles"]
+                               in_keys=["player_tiles", "wall_tiles", "reward_tiles", 'terminal_tiles'],
+                               out_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles", 'flat_terminal_tiles']
                                )
         )
         env.append_transform(
             CatTensors(
-                in_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles"],
+                in_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles", 'flat_terminal_tiles'],
                 out_key='flat_obs'
             )
         )
@@ -445,6 +525,17 @@ if __name__ == '__main__':
 
     in_features = env.observation_spec['flat_obs'].shape[-1]
     actions_n = env.action_spec.n
+
+
+    class VGGConvBlock(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = nn.Conv2d(in_channels=3, out_channels=3, stride=2, kernel_size=3, padding=1)
+            self.conv2 = nn.Conv2d(in_channels=3, out_channels=3, stride=2, kernel_size=3, padding=1)
+            self.conv3 = nn.Conv2d(in_channels=3, out_channels=1, stride=2, kernel_size=3, padding=1)
+
+        def forward(self, wall_tiles, reward_tiles, player_tiles):
+            vision = torch.stack([wall_tiles, reward_tiles, player_tiles], dim=1)
 
 
     class Value(nn.Module):
