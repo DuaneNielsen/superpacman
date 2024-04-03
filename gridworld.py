@@ -437,7 +437,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=42, help="seed (defaults 42)")
     parser.add_argument('--env_batch_size', type=int, default=16, help="number of environments")
     parser.add_argument('--steps_per_batch', type=int, default=32, help="number of steps to take in env per batch")
-    parser.add_argument('--train_steps', type=int, default=1e6, help="number of PPO updates to run")
+    parser.add_argument('--train_steps', type=int, default=3e4, help="number of PPO updates to run")
     parser.add_argument('--clip_epsilon', type=float, default=0.1, help="PPO clipping parameter")
     parser.add_argument('--gamma', type=float, default=0.99, help="GAE gamma parameter")
     parser.add_argument('--lmbda', type=float, default=0.99, help="GAE lambda parameter")
@@ -447,6 +447,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=1e-3, help="Adam learning rate")
     parser.add_argument('--lr_sched_step_size', type=int, default=1e5, help="decay lr after this many steps")
     parser.add_argument('--lr_sched_gamma', type=int, default=0.7, help="decay lr after this many steps")
+    parser.add_argument('--ppo_steps', type=int, default=4, help="number of ppo updates per batch")
     parser.add_argument('--eval_freq', type=int, default=5000, help="run eval after this many training steps")
     parser.add_argument('--eval_len', type=int, default=1000, help="run eval after this many training steps")
     parser.add_argument('--demo', action='store_true', help="command switch to visualize after training completes")
@@ -478,6 +479,7 @@ if __name__ == '__main__':
     from torchrl.record import VideoRecorder
     from csv import CSVLogger
     from pathlib import Path
+    from time import time
 
     exp_name = 'superpacman'
     if args.wandb:
@@ -490,8 +492,8 @@ if __name__ == '__main__':
     total_frames = args.env_batch_size * args.steps_per_batch * args.train_steps
 
 
-    def make_env(log_video):
-        env = Gridworld(batch_size=torch.Size([args.env_batch_size]), device=args.device)
+    def make_env(log_video, env_batch_size):
+        env = Gridworld(batch_size=torch.Size([env_batch_size]), device=args.device)
         env = TransformedEnv(
             env
         )
@@ -520,8 +522,8 @@ if __name__ == '__main__':
         return env, recorder
 
 
-    env, recorder = make_env(args.log_video)
-    eval_env, eval_recorder = make_env(True)
+    env, recorder = make_env(args.log_video, args.env_batch_size)
+    eval_env, eval_recorder = make_env(True, 32)
 
     in_features = env.observation_spec['flat_obs'].shape[-1]
     actions_n = env.action_spec.n
@@ -657,29 +659,34 @@ if __name__ == '__main__':
     logs = defaultdict(list)
     pbar = tqdm.tqdm(total=total_frames)
     eval_str = ""
+    after_update = time()
 
     for i, tensordict_data in enumerate(collector):
+        after_collect = time()
+        env_time = after_collect - after_update
+        for _ in range(args.ppo_steps):
+            advantage_module(tensordict_data)
+            loss_vals = loss_module(tensordict_data)
+            loss_value = (
+                    loss_vals["loss_objective"]
+                    + loss_vals["loss_critic"]
+                    + loss_vals["loss_entropy"]
+            )
 
-        advantage_module(tensordict_data)
-        loss_vals = loss_module(tensordict_data)
-        loss_value = (
-                loss_vals["loss_objective"]
-                + loss_vals["loss_critic"]
-                + loss_vals["loss_entropy"]
-        )
+            loss_value.backward()
+            torch.nn.utils.clip_grad_norm_(loss_module.parameters(), args.max_grad_norm)
+            optim.step()
+            optim.zero_grad()
+        after_update = time()
+        update_time = after_update - after_collect
 
-        loss_value.backward()
-        torch.nn.utils.clip_grad_norm_(loss_module.parameters(), args.max_grad_norm)
-        optim.step()
-        optim.zero_grad()
-
-
-        def retrieve_episode_stats(tensordict_data, prefix=None):
+        def retrieve_episode_stats(tensordict_data, loss_value, prefix=None):
             with torch.no_grad():
                 prefix = '' if prefix is None else f"{prefix}_"
                 episode_reward = tensordict_data["next", "episode_reward"]
                 step_count = tensordict_data["step_count"]
                 state_value = tensordict_data['state_value']
+                entropy = loss_value['entropy']
                 return {
                     f"{prefix}episode_reward_mean": episode_reward.mean().item(),
                     f"{prefix}episode_reward_max": episode_reward.max().item(),
@@ -687,15 +694,20 @@ if __name__ == '__main__':
                     f"{prefix}step_count_max": step_count.max().item(),
                     f"{prefix}state_value_max": state_value.max().item(),
                     f"{prefix}state_value_mean": state_value.mean().item(),
-                    f"{prefix}state_value_min": state_value.min().item()
+                    f"{prefix}state_value_min": state_value.min().item(),
+                    f"{prefix}policy_entropy_value_max": entropy.max().item(),
+                    f"{prefix}policy_entropy_value_mean": entropy.mean().item(),
+                    f"{prefix}policy_entropy_value_min": entropy.min().item(),
                 }
 
 
-        epi_stats = retrieve_episode_stats(tensordict_data, 'train')
+        epi_stats = retrieve_episode_stats(tensordict_data, loss_vals, 'train')
         if i % 10 == 0 and args.wandb:
             wandb.log(epi_stats, step=i)
             wandb.log({
-                "learning rate": scheduler.get_last_lr()
+                "learning rate": scheduler.get_last_lr()[0],
+                "env_time": env_time,
+                "update_time": update_time,
             }, step=i)
 
         if args.log_video and i % 1000 == 0:
@@ -724,7 +736,8 @@ if __name__ == '__main__':
                 eval_rollout = eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
                 pbar.set_description('computing stats')
                 advantage_module(eval_rollout)
-                epi_stats = retrieve_episode_stats(eval_rollout, prefix='eval')
+                loss = loss_module(eval_rollout)
+                epi_stats = retrieve_episode_stats(eval_rollout, loss, prefix='eval')
                 if args.wandb:
                     wandb.log(epi_stats, step=i)
 
@@ -741,9 +754,9 @@ if __name__ == '__main__':
                 del eval_rollout
                 reward_mean = epi_stats['eval_episode_reward_mean']
                 pbar.set_description('writing video')
-                eval_recorder.dump(suffix='eval')
+                eval_recorder.dump(suffix=f'eval_{reward_mean:.2f}')
                 pbar.set_description('saving checkpoint')
-                save_checkpoint(f'models/{exp_name}/checkpoint_{i}_{reward_mean:.2f}.pt')
+                save_checkpoint(f'models/{exp_name}/checkpoint_{i//args.eval_freq}_{reward_mean:.2f}.pt')
 
     # if args.demo:
     #   from matplotlib import pyplot as plt
