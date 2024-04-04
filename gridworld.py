@@ -451,9 +451,12 @@ if __name__ == '__main__':
     parser.add_argument('--eval_freq', type=int, default=5000, help="run eval after this many training steps")
     parser.add_argument('--eval_len', type=int, default=1000, help="run eval after this many training steps")
     parser.add_argument('--demo', action='store_true', help="command switch to visualize after training completes")
-    parser.add_argument('--log_video', action='store_true', help='enable video logging')
+    parser.add_argument('--log_train_video', action='store_true', help='enable video logging')
+    parser.add_argument('--log_eval_video', action='store_true', help='enable video logging during eval')
     parser.add_argument('--wandb', action='store_true', help='command switch to enable wandb logging')
+    parser.add_argument('--warmup_steps', type=int, default=3, help='delay before starting to learn')
     parser.add_argument('--load_checkpoint')
+
     args = parser.parse_args()
 
     import tqdm
@@ -461,6 +464,7 @@ if __name__ == '__main__':
     from collections import defaultdict
     import torch.nn as nn
     from torch.optim import Adam
+    from torch.optim.lr_scheduler import LambdaLR
     from tensordict.nn import TensorDictModule
     from torch.distributions import Categorical
     from torch.nn.functional import log_softmax
@@ -480,6 +484,8 @@ if __name__ == '__main__':
     from csv import CSVLogger
     from pathlib import Path
     from time import time
+    from warnings import warn
+    from math import inf
 
     exp_name = 'superpacman'
     if args.wandb:
@@ -511,9 +517,9 @@ if __name__ == '__main__':
         )
         env.append_transform(StepCounter())
         env.append_transform(RewardSum(reset_keys=['_reset']))
-        env.append_transform(RGBFullObsTransform())
         recorder = None
         if log_video:
+            env.append_transform(RGBFullObsTransform())
             logger = CSVLogger(exp_name=exp_name, log_dir="logs", video_fps=3, video_format='mp4')
             recorder = VideoRecorder(logger=logger, tag='pacman', fps=3, skip=1)
             env.append_transform(recorder)
@@ -522,8 +528,8 @@ if __name__ == '__main__':
         return env, recorder
 
 
-    env, recorder = make_env(args.log_video, args.env_batch_size)
-    eval_env, eval_recorder = make_env(True, 32)
+    env, recorder = make_env(args.log_train_video, args.env_batch_size)
+    eval_env, eval_recorder = make_env(args.log_eval_video, 32)
 
     in_features = env.observation_spec['flat_obs'].shape[-1]
     actions_n = env.action_spec.n
@@ -630,9 +636,17 @@ if __name__ == '__main__':
     #     optim, total_frames // frames_per_batch, 0.0
     # )
 
-    scheduler = torch.optim.lr_scheduler.StepLR(
-        optim, step_size=args.lr_sched_step_size, gamma=args.lr_sched_gamma
-    )
+    def warmup(current_step: int):
+        if current_step < args.warmup_steps:
+            return 0.
+        else:
+            return 1.
+
+    scheduler = LambdaLR(optim, lr_lambda=warmup)
+
+    # scheduler = torch.optim.lr_scheduler.StepLR(
+    #     optim, step_size=args.lr_sched_step_size, gamma=args.lr_sched_gamma
+    # )
 
 
     def save_checkpoint(filename):
@@ -677,6 +691,8 @@ if __name__ == '__main__':
             torch.nn.utils.clip_grad_norm_(loss_module.parameters(), args.max_grad_norm)
             optim.step()
             optim.zero_grad()
+
+        scheduler.step()
         after_update = time()
         update_time = after_update - after_collect
 
@@ -710,7 +726,7 @@ if __name__ == '__main__':
                 "update_time": update_time,
             }, step=i)
 
-        if args.log_video and i % 1000 == 0:
+        if args.log_train_video and i % 1000 == 0:
             recorder.dump(suffix='train')
 
         logs["reward"].append(tensordict_data["next", "reward"].mean().item())
@@ -728,7 +744,6 @@ if __name__ == '__main__':
         lr_str = f"lr policy: {logs['lr'][-1]: 4.4f}"
 
         pbar.set_description(", ".join([eval_str, cum_reward_str, stepcount_str, lr_str]))
-        scheduler.step()
 
         if i % args.eval_freq == 0:
             with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
@@ -753,10 +768,39 @@ if __name__ == '__main__':
                 )
                 del eval_rollout
                 reward_mean = epi_stats['eval_episode_reward_mean']
-                pbar.set_description('writing video')
-                eval_recorder.dump(suffix=f'eval_{reward_mean:.2f}')
+
+                if args.log_eval_video:
+                    pbar.set_description('writing video')
+                    eval_recorder.dump(suffix=f'eval_{reward_mean:.2f}')
+
                 pbar.set_description('saving checkpoint')
                 save_checkpoint(f'models/{exp_name}/checkpoint_{i//args.eval_freq}_{reward_mean:.2f}.pt')
+
+
+    def best_checkpt(directory):
+        best_rew = -inf
+        best_chkpt = None
+        for chkp in Path(directory).glob('*.pt'):
+            reward_str = chkp.name.split('_')[-1][:-3]
+            try:
+                rew = float(reward_str)
+                if rew > best_rew:
+                    best_rew = rew
+                    best_chkpt = str(chkp)
+            except ValueError:
+                warn(f'{reward_str} is not a valid float')
+
+        return best_chkpt, best_rew
+
+    best_chkpt, best_reward = best_checkpt(f'models/{exp_name}')
+    if best_chkpt is not None:
+        with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
+            eval_env, eval_recorder = make_env(True, 32)
+            load_checkpoint(best_chkpt)
+            pbar.set_description('rolling out best policy found')
+            eval_rollout = eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
+            pbar.set_description('writing video')
+            eval_recorder.dump(suffix=f'eval_{best_reward:.2f}')
 
     # if args.demo:
     #   from matplotlib import pyplot as plt
