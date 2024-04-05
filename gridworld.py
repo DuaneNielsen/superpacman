@@ -36,6 +36,20 @@ class Actions(IntEnum):
     W = 3
 
 
+class Ghost(IntEnum):
+    BLINKY = 0,
+    PINKY = 1,
+    INKY = 2,
+    CLAUDE = 3
+
+
+class GhostMode(IntEnum):
+    WAIT = 0,
+    SCATTER = 1,
+    CHASE = 2
+    FRIGHTENED = 3
+
+
 # N/S is reversed as y-axis in images is reversed
 action_vec = torch.stack(
     [
@@ -81,10 +95,6 @@ def pos_to_grid(pos, H, W, device='cpu', dtype=torch.float32):
     return grid
 
 
-def l2_distance_to_target(tile_pos, target_pos):
-    N, G, _, _ = tile_pos.shape
-    return torch.sum((target_pos.view(N, 1, 1, 2) - tile_pos) ** 2, dim=-1)
-
 
 def _step(state):
     device = state.device
@@ -93,60 +103,81 @@ def _step(state):
 
     wall_tiles = state['wall_tiles']
     batch_range = torch.arange(N, device=device)
+    ghost_range = torch.arange(G, device=device)
     dtype = state['wall_tiles'].dtype
     action = state['action'].squeeze(-1)
     direction = action_vec.to(device)
     big_distance = H ** 2 + W ** 2
     ghost_pos = state['ghost_pos']
+    player_pos = state['player_pos']
+    t = state['t']
 
-    # update ghost positions
+    # ghost mode
+
+
+    # 4 ghost candidate positions, N, G, Pos, xy
     candidate_tile_pos = direction.view(1, 1, 4, 2) + ghost_pos.view(N, G, 1, 2)
     candidate_tile_pos = candidate_tile_pos % H
 
-    # get the distance from each candidate to the target tile
-    candidate_tile_dist = torch.sum((state['player_pos'].view(N, 1, 1, 2) - candidate_tile_pos) ** 2, dim=-1)
+    chase_targets = torch.zeros(N, G, 2, dtype=torch.int64, device=device)
+    chase_targets[batch_range.view(N), Ghost.BLINKY] = player_pos
+    chase_targets[batch_range.view(N), Ghost.PINKY] = player_pos + direction[action] * 4
 
-    # add a big distance if it's a wall so it will be no bueano
+    wait_targets = tensor([7, 10], dtype=torch.int64, device=device).expand(N, G, 2)
+    scatter_targets = tensor([
+        [-3, 20],
+        [-3, 0],
+    ], dtype=torch.int64, device=device).expand(N, G, 2)
+    scatter = (t % 27 <= 7) & (t < 27 * 3)
+    targets = torch.where(scatter.view(N, 1, 1), scatter_targets, chase_targets)
+
+    # get the distance from each candidate to the target tile
+    candidate_tile_dist = torch.sum((targets.view(N, G, 1, 2) - candidate_tile_pos) ** 2, dim=-1)
+
+    # add a big distance if it's a wall so it will be no bueuno
     is_wall = wall_tiles[batch_range.view(N, 1, 1), candidate_tile_pos[..., 0], candidate_tile_pos[..., 1]]
     candidate_tile_dist = candidate_tile_dist + is_wall * big_distance
 
     # ghosts cant reverse the direction of travel
     rev_direction = (state['ghost_dir'] + 2) % 4
-    candidate_tile_dist[batch_range, torch.arange(candidate_tile_dist.size(1)), rev_direction.squeeze()] = big_distance
+    candidate_tile_dist[batch_range.view(N, 1), ghost_range.view(1, G), rev_direction] = big_distance
 
     # pick the best direction
     distance, ghost_direction = torch.min(candidate_tile_dist, dim=-1)
     next_ghost_pos = ghost_pos + direction[ghost_direction]
     next_ghost_pos = next_ghost_pos % H
-    pinky_tiles = pos_to_grid(next_ghost_pos[:, 0], H, W, device=device, dtype=dtype)
+
+    # write the grids for each ghost
+    blinky_tiles = pos_to_grid(next_ghost_pos[:, 0], H, W, device=device, dtype=dtype)
+    pinky_tiles = pos_to_grid(next_ghost_pos[:, 1], H, W, device=device, dtype=dtype)
 
     # move player position checking for collisions
-    next_player_pos = state['player_pos'] + direction[action]
+    next_player_pos = player_pos + direction[action]
     next_player_pos = next_player_pos % H
     next_player_grid = pos_to_grid(next_player_pos, H, W, device=device, dtype=torch.bool)
     collide_wall = torch.logical_and(next_player_grid, state['wall_tiles'] == 1).any(-1).any(-1)
-    player_pos = torch.where(collide_wall[..., None], state['player_pos'], next_player_pos)
+    player_pos = torch.where(collide_wall[..., None], player_pos, next_player_pos)
     player_tiles = pos_to_grid(player_pos, H, W, device=device, dtype=dtype)
 
     # pickup any rewards
     reward = state['reward_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]]
     state['reward_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]] = 0.
 
-    # set terminated flag if hit terminal tile
-    # terminated = state['terminal_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]]
+    # terminate if a ghost moves into your tile
     terminated = (next_ghost_pos == player_pos.view(N, 1, 2)).all(-1).any(-1)
     terminated = (ghost_pos == player_pos.view(N, 1, 2)).all(-1).any(-1) | terminated
 
-
     out = {
+        't': t + 1,
         'player_pos': player_pos,
         'player_tiles': player_tiles,
         'ghost_pos': next_ghost_pos,
         'ghost_dir': ghost_direction,
+        'blinky_tiles': blinky_tiles,
         'pinky_tiles': pinky_tiles,
         'wall_tiles': state['wall_tiles'],
         'reward_tiles': state['reward_tiles'],
-        'terminal_tiles': state['terminal_tiles'],
+        'energizer_tiles': state['energizer_tiles'],
         'reward': reward.unsqueeze(-1),
         'terminated': terminated.unsqueeze(-1)
     }
@@ -182,7 +213,7 @@ def gen_params(batch_size=None):
        "player_tiles": N, 5, 5 tensor, with a single tile set to 1 that indicates player position
        "wall_tiles": N, 5, 5 tensor, 1 indicates wall
        "reward_tiles": N, 5, 5 tensor, rewards remaining in environment
-       "terminal_tiles": N, 5, 5 tensor, episode will terminate when tile with value True is entered
+       "energizer_tiles": N, 5, 5 tensor, episode will terminate when tile with value True is entered
 
     """
     walls = tensor([
@@ -259,20 +290,24 @@ def gen_params(batch_size=None):
 
     H, W = walls.shape
     player_pos = tensor([15, 10], dtype=torch.int64)
-    ghost_pos = tensor([[7, 10]], dtype=torch.int64)
-    ghost_dir = tensor([Actions.W], dtype=torch.int64)
+    ghost_pos = tensor([[7, 10], [7, 10]], dtype=torch.int64)
+    ghost_dir = tensor([Actions.W, Actions.W], dtype=torch.int64)
     player_tiles = pos_to_grid(player_pos, H, W, dtype=walls.dtype)
-    pinky_tiles = pos_to_grid(ghost_pos[0], H, W, dtype=walls.dtype)
+    blinky_tiles = pos_to_grid(ghost_pos[0], H, W, dtype=walls.dtype)
+    pinky_tiles = pos_to_grid(ghost_pos[1], H, W, dtype=walls.dtype)
+    t = tensor([0], dtype=torch.int64)
 
     state = {
+        "t": t,
         "player_pos": player_pos,
         "player_tiles": player_tiles,
         "ghost_pos": ghost_pos,
         "ghost_dir": ghost_dir,
+        "blinky_tiles": blinky_tiles,
         "pinky_tiles": pinky_tiles,
         "wall_tiles": walls,
         "reward_tiles": rewards,
-        "terminal_tiles": terminal_states
+        "energizer_tiles": terminal_states
     }
 
     td = TensorDict(state, batch_size=[])
@@ -285,10 +320,20 @@ def gen_params(batch_size=None):
 def _make_spec(self, td_params):
     batch_size = td_params.shape
     self.observation_spec = CompositeSpec(
+        t=UnboundedDiscreteTensorSpec(
+            shape=torch.Size((*batch_size, 1)),
+            dtype=torch.int64
+        ),
         player_tiles=BoundedTensorSpec(
             minimum=0,
             maximum=1,
             shape=torch.Size(td_params['player_tiles'].shape),
+            dtype=torch.float32,
+        ),
+        blinky_tiles=BoundedTensorSpec(
+            minimum=0,
+            maximum=1,
+            shape=torch.Size(td_params['blinky_tiles'].shape),
             dtype=torch.float32,
         ),
         pinky_tiles=BoundedTensorSpec(
@@ -307,10 +352,10 @@ def _make_spec(self, td_params):
             shape=torch.Size(td_params['reward_tiles'].shape),
             dtype=torch.float32,
         ),
-        terminal_tiles=BoundedTensorSpec(
+        energizer_tiles=BoundedTensorSpec(
             minimum=0,
             maximum=1,
-            shape=torch.Size(td_params['terminal_tiles'].shape),
+            shape=torch.Size(td_params['energizer_tiles'].shape),
             dtype=torch.bool,
         ),
         player_pos=UnboundedDiscreteTensorSpec(
@@ -318,11 +363,11 @@ def _make_spec(self, td_params):
             dtype=torch.int64
         ),
         ghost_pos=UnboundedDiscreteTensorSpec(
-            shape=torch.Size((*batch_size, 1, 2)),
+            shape=torch.Size((*batch_size, 2, 2)),
             dtype=torch.int64
         ),
         ghost_dir=UnboundedDiscreteTensorSpec(
-            shape=torch.Size((*batch_size, 1)),
+            shape=torch.Size((*batch_size, 2)),
             dtype=torch.int64
         ),
         shape=torch.Size((*batch_size,))
@@ -360,8 +405,8 @@ class Gridworld(EnvBase):
 class CenterPlayerTransform(ObservationTransform):
     def __init__(self, patch_radius=2):
         super().__init__(
-            in_keys=['wall_tiles', 'reward_tiles', 'terminal_tiles', 'pinky_tiles'],
-            out_keys=['c_wall_tiles', 'c_reward_tiles', 'c_terminal_tiles', 'c_pinky_tiles'])
+            in_keys=['wall_tiles', 'reward_tiles', 'energizer_tiles', 'pinky_tiles', 'blinky_tiles'],
+            out_keys=['c_wall_tiles', 'c_reward_tiles', 'c_energizer_tiles', 'c_pinky_tiles', 'c_blinky_tiles'])
         self.size = patch_radius
 
     def forward(self, tensordict):
@@ -415,7 +460,8 @@ class RGBPartialObsTransform(ObservationTransform):
     def _call(self, td):
         walls = td['c_wall_tiles']
         rewards = td['c_reward_tiles']
-        terminal = td['c_terminal_tiles']
+        terminal = td['c_energizer_tiles']
+        blinky_tiles = td['c_blinky_tiles']
         pinky_tiles = td['c_pinky_tiles']
         device = walls.device
 
@@ -427,7 +473,8 @@ class RGBPartialObsTransform(ObservationTransform):
         td['pixels'][rewards < 0] = red.to(device)
         td['pixels'][terminal == 1] = blue.to(device)
         td['pixels'][:, center_x, center_y] = yellow.to(device)
-        td['pixels'][pinky_tiles == 1] = red.to(device)
+        td['pixels'][blinky_tiles == 1] = red.to(device)
+        td['pixels'][pinky_tiles == 1] = pink.to(device)
         return td
 
     @_apply_to_composite
@@ -459,10 +506,11 @@ class RGBFullObsTransform(ObservationTransform):
 
     def _call(self, td):
         player_tiles = td['player_tiles']
+        blinky_tiles = td['blinky_tiles']
         pinky_tiles = td['pinky_tiles']
         walls = td['wall_tiles']
         rewards = td['reward_tiles']
-        terminal = td['terminal_tiles']
+        terminal = td['energizer_tiles']
         device = walls.device
 
         shape = *walls.shape, 3
@@ -472,7 +520,8 @@ class RGBFullObsTransform(ObservationTransform):
         td['pixels'][rewards < 0] = red.to(device)
         td['pixels'][terminal == 1] = blue.to(device)
         td['pixels'][player_tiles == 1] = yellow.to(device)
-        td['pixels'][pinky_tiles == 1] = red.to(device)
+        td['pixels'][blinky_tiles == 1] = red.to(device)
+        td['pixels'][pinky_tiles == 1] = pink.to(device)
         return td
 
     @_apply_to_composite
@@ -570,12 +619,12 @@ if __name__ == '__main__':
         env.append_transform(FlattenObservation(
             -2, -1,
             in_keys=["player_tiles", "wall_tiles", "reward_tiles",
-                     'terminal_tiles'],
+                     'energizer_tiles'],
             out_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles",
-                      'flat_terminal_tiles']
+                      'flat_energizer_tiles']
         ))
         env.append_transform(CatTensors(
-            in_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles", 'flat_terminal_tiles'],
+            in_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles", 'flat_energizer_tiles'],
             out_key='flat_obs'
         ))
         env.append_transform(CenterPlayerTransform(
@@ -651,7 +700,7 @@ if __name__ == '__main__':
 
     value_module = ValueOperator(
         module=value_net,
-        in_keys=['flat_obs', 'c_wall_tiles', 'c_reward_tiles', 'c_terminal_tiles']
+        in_keys=['flat_obs', 'c_wall_tiles', 'c_reward_tiles', 'c_energizer_tiles']
     ).to(args.device)
 
 
@@ -679,7 +728,7 @@ if __name__ == '__main__':
 
     policy_module = TensorDictModule(
         policy_net,
-        in_keys=['flat_obs', 'c_wall_tiles', 'c_reward_tiles', 'c_terminal_tiles'],
+        in_keys=['flat_obs', 'c_wall_tiles', 'c_reward_tiles', 'c_energizer_tiles'],
         out_keys=['logits'],
     )
 
