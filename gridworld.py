@@ -10,6 +10,7 @@ from torchrl.envs import (
 from torchrl.envs.transforms.transforms import _apply_to_composite, ObservationTransform
 from typing import Any, Dict, List, Optional, OrderedDict, Sequence, Tuple, Union
 from enum import IntEnum
+from torchvision.utils import draw_segmentation_masks
 
 """
 A minimal stateless vectorized gridworld in pytorch rl
@@ -299,10 +300,11 @@ class Gridworld(EnvBase):
     _set_seed = _set_seed
 
 
+
 class CenterPlayerTransform(ObservationTransform):
-    def __init__(self, in_keys, out_keys, size=2):
+    def __init__(self, in_keys, out_keys, patch_radius=2):
         super().__init__(in_keys=in_keys, out_keys=out_keys)
-        self.size = size
+        self.size = patch_radius
 
     def forward(self, tensordict):
         return self._call(tensordict)
@@ -313,13 +315,16 @@ class CenterPlayerTransform(ObservationTransform):
     def _call(self, td):
         for in_key, out_key in zip(self.in_keys, self.out_keys):
             N, H, W = td[in_key].shape
-            batch_range = torch.stack([torch.arange(N)]*(self.size*2+1), dim=-1)
-            x, y = [], []
-            for pos in td['player_pos']:
-                x += [torch.arange(pos[0]-self.size, pos[0] + self.size+1) % H]
-                y += [torch.arange(pos[1]-self.size, pos[1] + self.size+1) % W]
-            x, y = torch.stack(x), torch.stack(y)
-            td[out_key] = td[in_key][batch_range, x][batch_range, :, y].permute(0, 2, 1)
+            device = td[in_key].device
+            max_x, max_y = 2 * self.size + 1, 2 * self.size + 1
+
+            x, y = torch.meshgrid(torch.arange(max_x, device=device), torch.arange(max_y, device=device), indexing='ij')
+            grid = torch.stack([x, y], 0).view(1, 2, max_x, max_y)
+            player_coords = td['player_pos'].view(N, 2, 1, 1)
+            indexes = player_coords + grid - self.size
+            indexes = indexes % H
+            batch_range = torch.arange(N, device=device)
+            td[out_key] = td[in_key][batch_range.view(N, 1), indexes[:, 0].flatten(-2), indexes[:, 1].flatten(-2)].view(N, max_x, max_y)
         return td
 
     @_apply_to_composite
@@ -328,7 +333,7 @@ class CenterPlayerTransform(ObservationTransform):
         return BoundedTensorSpec(
             minimum=0,
             maximum=255,
-            shape=torch.Size((N, self.size*2+1, self.size*2+1)),
+            shape=torch.Size((N, self.size * 2 + 1, self.size * 2 + 1)),
             dtype=observation_spec.dtype,
             device=observation_spec.device
         )
@@ -356,7 +361,7 @@ class RGBPartialObsTransform(ObservationTransform):
         device = walls.device
 
         shape = *walls.shape, 3
-        center_x, center_y = shape[1]//2,  shape[2]//2
+        center_x, center_y = shape[1] // 2, shape[2] // 2
         td['pixels'] = torch.zeros(shape, dtype=torch.uint8, device=device)
         td['pixels'][walls == 1] = light_gray.to(device)
         td['pixels'][rewards > 0] = green.to(device)
@@ -376,7 +381,6 @@ class RGBPartialObsTransform(ObservationTransform):
             dtype=torch.uint8,
             device=observation_spec.device
         )
-
 
 
 class RGBFullObsTransform(ObservationTransform):
@@ -503,20 +507,25 @@ if __name__ == '__main__':
         env = TransformedEnv(
             env
         )
-        env.append_transform(
-            FlattenObservation(-2, -1,
-                               in_keys=["player_tiles", "wall_tiles", "reward_tiles", 'terminal_tiles'],
-                               out_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles", 'flat_terminal_tiles']
-                               )
-        )
-        env.append_transform(
-            CatTensors(
-                in_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles", 'flat_terminal_tiles'],
-                out_key='flat_obs'
-            )
-        )
+        env.append_transform(FlattenObservation(
+            -2, -1,
+            in_keys=["player_tiles", "wall_tiles", "reward_tiles",
+                     'terminal_tiles'],
+            out_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles",
+                      'flat_terminal_tiles']
+        ))
+        env.append_transform(CatTensors(
+            in_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles", 'flat_terminal_tiles'],
+            out_key='flat_obs'
+        ))
+        env.append_transform(CenterPlayerTransform(
+            in_keys=['wall_tiles', 'reward_tiles', 'terminal_tiles'],
+            out_keys=['c_wall_tiles', 'c_reward_tiles', 'c_terminal_tiles'],
+            patch_radius=4
+        ))
         env.append_transform(StepCounter())
         env.append_transform(RewardSum(reset_keys=['_reset']))
+
         recorder = None
         if log_video:
             env.append_transform(RGBFullObsTransform())
@@ -538,12 +547,25 @@ if __name__ == '__main__':
     class VGGConvBlock(nn.Module):
         def __init__(self):
             super().__init__()
-            self.conv1 = nn.Conv2d(in_channels=3, out_channels=3, stride=2, kernel_size=3, padding=1)
-            self.conv2 = nn.Conv2d(in_channels=3, out_channels=3, stride=2, kernel_size=3, padding=1)
-            self.conv3 = nn.Conv2d(in_channels=3, out_channels=1, stride=2, kernel_size=3, padding=1)
+            self.layers = nn.Sequential(
+                nn.Conv2d(in_channels=3, out_channels=128, stride=1, kernel_size=3, padding=1),
+                nn.SELU(inplace=True),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1),
+                nn.SELU(inplace=True),
+                nn.MaxPool2d(kernel_size=2, stride=2)
+            )
 
         def forward(self, wall_tiles, reward_tiles, player_tiles):
-            vision = torch.stack([wall_tiles, reward_tiles, player_tiles], dim=1)
+            vision = torch.stack([wall_tiles, reward_tiles, player_tiles], dim=-3)
+            if len(vision.shape) == 5:
+                N, L, C, H, W = vision.shape
+                vision = vision.flatten(0, 1)
+                vision = self.layers(vision)
+                vision = vision.unflatten(0, (N, L))
+            else:
+                vision = self.layers(vision)
+            return vision
 
 
     class Value(nn.Module):
@@ -554,13 +576,16 @@ if __name__ == '__main__':
         def __init__(self, in_features, hidden_dim):
             super().__init__()
             self.net = nn.Sequential(
-                nn.Linear(in_features=in_features, out_features=hidden_dim),
+                nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
                 nn.ReLU(),
                 nn.Linear(in_features=hidden_dim, out_features=1, bias=False)
             )
+            self.convblock = VGGConvBlock()
 
-        def forward(self, obs):
-            values = self.net(obs)
+        def forward(self, flat_obs, wall_tiles, reward_tiles, player_tiles):
+            conv_values = self.convblock(wall_tiles, reward_tiles, player_tiles)
+            features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
+            values = self.net(features)
             return values
 
 
@@ -568,7 +593,7 @@ if __name__ == '__main__':
 
     value_module = ValueOperator(
         module=value_net,
-        in_keys=['flat_obs']
+        in_keys=['flat_obs', 'c_wall_tiles', 'c_reward_tiles', 'c_terminal_tiles']
     ).to(args.device)
 
 
@@ -580,21 +605,24 @@ if __name__ == '__main__':
         def __init__(self, in_features, hidden_dim, actions_n):
             super().__init__()
             self.net = nn.Sequential(
-                nn.Linear(in_features=in_features, out_features=hidden_dim),
+                nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
                 nn.ReLU(),
                 nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
             )
+            self.convblock = VGGConvBlock()
 
-        def forward(self, obs):
-            return log_softmax(self.net(obs), dim=-1)
+        def forward(self, flat_obs, wall_tiles, reward_tiles, player_tiles):
+            conv_values = self.convblock(wall_tiles, reward_tiles, player_tiles)
+            features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
+            return log_softmax(self.net(features), dim=-1)
 
 
     policy_net = Policy(in_features, args.hidden_dim, actions_n)
 
     policy_module = TensorDictModule(
         policy_net,
-        in_keys=["flat_obs"],
-        out_keys=["logits"],
+        in_keys=['flat_obs', 'c_wall_tiles', 'c_reward_tiles', 'c_terminal_tiles'],
+        out_keys=['logits'],
     )
 
     policy_module = ProbabilisticActor(
@@ -632,6 +660,8 @@ if __name__ == '__main__':
     )
 
     optim = Adam(loss_module.parameters(), lr=args.lr)
+
+
     # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     #     optim, total_frames // frames_per_batch, 0.0
     # )
@@ -642,12 +672,13 @@ if __name__ == '__main__':
         else:
             return 1.
 
+
     scheduler = LambdaLR(optim, lr_lambda=warmup)
+
 
     # scheduler = torch.optim.lr_scheduler.StepLR(
     #     optim, step_size=args.lr_sched_step_size, gamma=args.lr_sched_gamma
     # )
-
 
     def save_checkpoint(filename):
         Path(filename).parent.mkdir(parents=True, exist_ok=True)
@@ -695,6 +726,7 @@ if __name__ == '__main__':
         scheduler.step()
         after_update = time()
         update_time = after_update - after_collect
+
 
         def retrieve_episode_stats(tensordict_data, loss_value, prefix=None):
             with torch.no_grad():
@@ -774,7 +806,7 @@ if __name__ == '__main__':
                     eval_recorder.dump(suffix=f'eval_{reward_mean:.2f}')
 
                 pbar.set_description('saving checkpoint')
-                save_checkpoint(f'models/{exp_name}/checkpoint_{i//args.eval_freq}_{reward_mean:.2f}.pt')
+                save_checkpoint(f'models/{exp_name}/checkpoint_{i // args.eval_freq}_{reward_mean:.2f}.pt')
 
 
     def best_checkpt(directory):
@@ -791,6 +823,7 @@ if __name__ == '__main__':
                 warn(f'{reward_str} is not a valid float')
 
         return best_chkpt, best_rew
+
 
     best_chkpt, best_reward = best_checkpt(f'models/{exp_name}')
     if best_chkpt is not None:

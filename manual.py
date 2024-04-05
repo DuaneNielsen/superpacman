@@ -16,7 +16,7 @@ env = TransformedEnv(
 env.append_transform(CenterPlayerTransform(
     in_keys=['wall_tiles', 'reward_tiles', 'terminal_tiles'],
     out_keys=['c_wall_tiles', 'c_reward_tiles', 'c_terminal_tiles'],
-    size=4
+    patch_radius=4
 ))
 
 # env.append_transform(RGBFullObsTransform())

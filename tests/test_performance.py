@@ -1,4 +1,4 @@
-from gridworld import Gridworld, RGBFullObsTransform
+from gridworld import Gridworld, RGBFullObsTransform, CenterPlayerTransform
 from time import time
 from torchrl.envs import TransformedEnv, FlattenObservation, CatTensors, StepCounter, RewardSum, check_env_specs, ExplorationType, set_exploration_type
 from torchrl.record import VideoRecorder, CSVLogger
@@ -22,6 +22,13 @@ def make_env(log_video, env_batch_size):
             out_key='flat_obs'
         )
     )
+
+    env.append_transform(CenterPlayerTransform(
+        in_keys=['wall_tiles', 'reward_tiles', 'terminal_tiles'],
+        out_keys=['c_wall_tiles', 'c_reward_tiles', 'c_terminal_tiles'],
+        size=4
+    ))
+
     env.append_transform(StepCounter())
     env.append_transform(RewardSum(reset_keys=['_reset']))
     recorder = None

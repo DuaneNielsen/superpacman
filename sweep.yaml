@@ -18,13 +18,13 @@ metric:
   goal: maximize
 parameters:
   env_batch_size:
-    values: [4096]
+    values: [2048]
   steps_per_batch:
-    values: [32]
+    values: [8]
   train_steps:
-    values: [800]
+    values: [1000]
   clip_epsilon:
-    values: [0.75, 0.1, 0.125, 0.15]
+    values: [0.1]
   gamma:
     values: [0.99]
   lmbda:
@@ -38,6 +38,6 @@ parameters:
   lr:
     values: [1e-3]
   seed:
-    values: [42]
+    values: [42, 33, 12]
   ppo_steps:
-    values: [4, 6, 8, 12]
+    values: [6]
