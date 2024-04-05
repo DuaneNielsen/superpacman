@@ -58,6 +58,7 @@ light_gray = tensor([211, 211, 211], dtype=torch.uint8)
 blue = tensor([0, 0, 255], dtype=torch.uint8)
 
 
+
 def pos_to_grid(pos, H, W, device='cpu', dtype=torch.float32):
     """
     Converts positions to grid where 1 indicates a position
@@ -80,17 +81,48 @@ def pos_to_grid(pos, H, W, device='cpu', dtype=torch.float32):
     return grid
 
 
+def l2_distance_to_target(tile_pos, target_pos):
+    N, G, _, _ = tile_pos.shape
+    return torch.sum((target_pos.view(N, 1, 1, 2) - tile_pos) ** 2, dim=-1)
+
+
 def _step(state):
     device = state.device
     N, H, W = state['wall_tiles'].shape
+    _, G, _ = state['ghost_pos'].shape
+
+    wall_tiles = state['wall_tiles']
     batch_range = torch.arange(N, device=device)
     dtype = state['wall_tiles'].dtype
     action = state['action'].squeeze(-1)
+    direction = action_vec.to(device)
+    big_distance = H ** 2 + W ** 2
+    ghost_pos = state['ghost_pos']
+
+    # update ghost positions
+    candidate_tile_pos = direction.view(1, 1, 4, 2) + ghost_pos.view(N, G, 1, 2)
+    candidate_tile_pos = candidate_tile_pos % H
+
+    # get the distance from each candidate to the target tile
+    candidate_tile_dist = torch.sum((state['player_pos'].view(N, 1, 1, 2) - candidate_tile_pos) ** 2, dim=-1)
+
+    # add a big distance if it's a wall so it will be no bueano
+    is_wall = wall_tiles[batch_range.view(N, 1, 1), candidate_tile_pos[..., 0], candidate_tile_pos[..., 1]]
+    candidate_tile_dist = candidate_tile_dist + is_wall * big_distance
+
+    # ghosts cant reverse the direction of travel
+    rev_direction = (state['ghost_dir'] + 2) % 4
+    candidate_tile_dist[batch_range, torch.arange(candidate_tile_dist.size(1)), rev_direction.squeeze()] = big_distance
+
+    # pick the best direction
+    distance, ghost_direction = torch.min(candidate_tile_dist, dim=-1)
+    next_ghost_pos = ghost_pos + direction[ghost_direction]
+    next_ghost_pos = next_ghost_pos % H
+    pinky_tiles = pos_to_grid(next_ghost_pos[:, 0], H, W, device=device, dtype=dtype)
 
     # move player position checking for collisions
-    direction = action_vec.to(device)
     next_player_pos = state['player_pos'] + direction[action]
-    next_player_pos = next_player_pos % 21
+    next_player_pos = next_player_pos % H
     next_player_grid = pos_to_grid(next_player_pos, H, W, device=device, dtype=torch.bool)
     collide_wall = torch.logical_and(next_player_grid, state['wall_tiles'] == 1).any(-1).any(-1)
     player_pos = torch.where(collide_wall[..., None], state['player_pos'], next_player_pos)
@@ -101,11 +133,17 @@ def _step(state):
     state['reward_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]] = 0.
 
     # set terminated flag if hit terminal tile
-    terminated = state['terminal_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]]
+    # terminated = state['terminal_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]]
+    terminated = (next_ghost_pos == player_pos.view(N, 1, 2)).all(-1).any(-1)
+    terminated = (ghost_pos == player_pos.view(N, 1, 2)).all(-1).any(-1) | terminated
+
 
     out = {
         'player_pos': player_pos,
         'player_tiles': player_tiles,
+        'ghost_pos': next_ghost_pos,
+        'ghost_dir': ghost_direction,
+        'pinky_tiles': pinky_tiles,
         'wall_tiles': state['wall_tiles'],
         'reward_tiles': state['reward_tiles'],
         'terminal_tiles': state['terminal_tiles'],
@@ -221,12 +259,17 @@ def gen_params(batch_size=None):
 
     H, W = walls.shape
     player_pos = tensor([15, 10], dtype=torch.int64)
-    # player_pos = tensor([9, 0], dtype=torch.int64)
+    ghost_pos = tensor([[7, 10]], dtype=torch.int64)
+    ghost_dir = tensor([Actions.W], dtype=torch.int64)
     player_tiles = pos_to_grid(player_pos, H, W, dtype=walls.dtype)
+    pinky_tiles = pos_to_grid(ghost_pos[0], H, W, dtype=walls.dtype)
 
     state = {
         "player_pos": player_pos,
         "player_tiles": player_tiles,
+        "ghost_pos": ghost_pos,
+        "ghost_dir": ghost_dir,
+        "pinky_tiles": pinky_tiles,
         "wall_tiles": walls,
         "reward_tiles": rewards,
         "terminal_tiles": terminal_states
@@ -248,6 +291,12 @@ def _make_spec(self, td_params):
             shape=torch.Size(td_params['player_tiles'].shape),
             dtype=torch.float32,
         ),
+        pinky_tiles=BoundedTensorSpec(
+            minimum=0,
+            maximum=1,
+            shape=torch.Size(td_params['pinky_tiles'].shape),
+            dtype=torch.float32,
+        ),
         wall_tiles=BoundedTensorSpec(
             minimum=0,
             maximum=1,
@@ -266,6 +315,14 @@ def _make_spec(self, td_params):
         ),
         player_pos=UnboundedDiscreteTensorSpec(
             shape=torch.Size((*batch_size, 2,)),
+            dtype=torch.int64
+        ),
+        ghost_pos=UnboundedDiscreteTensorSpec(
+            shape=torch.Size((*batch_size, 1, 2)),
+            dtype=torch.int64
+        ),
+        ghost_dir=UnboundedDiscreteTensorSpec(
+            shape=torch.Size((*batch_size, 1)),
             dtype=torch.int64
         ),
         shape=torch.Size((*batch_size,))
@@ -300,10 +357,11 @@ class Gridworld(EnvBase):
     _set_seed = _set_seed
 
 
-
 class CenterPlayerTransform(ObservationTransform):
-    def __init__(self, in_keys, out_keys, patch_radius=2):
-        super().__init__(in_keys=in_keys, out_keys=out_keys)
+    def __init__(self, patch_radius=2):
+        super().__init__(
+            in_keys=['wall_tiles', 'reward_tiles', 'terminal_tiles', 'pinky_tiles'],
+            out_keys=['c_wall_tiles', 'c_reward_tiles', 'c_terminal_tiles', 'c_pinky_tiles'])
         self.size = patch_radius
 
     def forward(self, tensordict):
@@ -358,6 +416,7 @@ class RGBPartialObsTransform(ObservationTransform):
         walls = td['c_wall_tiles']
         rewards = td['c_reward_tiles']
         terminal = td['c_terminal_tiles']
+        pinky_tiles = td['c_pinky_tiles']
         device = walls.device
 
         shape = *walls.shape, 3
@@ -368,7 +427,7 @@ class RGBPartialObsTransform(ObservationTransform):
         td['pixels'][rewards < 0] = red.to(device)
         td['pixels'][terminal == 1] = blue.to(device)
         td['pixels'][:, center_x, center_y] = yellow.to(device)
-        td['pixels'] = td['pixels']
+        td['pixels'][pinky_tiles == 1] = red.to(device)
         return td
 
     @_apply_to_composite
@@ -400,6 +459,7 @@ class RGBFullObsTransform(ObservationTransform):
 
     def _call(self, td):
         player_tiles = td['player_tiles']
+        pinky_tiles = td['pinky_tiles']
         walls = td['wall_tiles']
         rewards = td['reward_tiles']
         terminal = td['terminal_tiles']
@@ -412,7 +472,7 @@ class RGBFullObsTransform(ObservationTransform):
         td['pixels'][rewards < 0] = red.to(device)
         td['pixels'][terminal == 1] = blue.to(device)
         td['pixels'][player_tiles == 1] = yellow.to(device)
-        # td['pixels'] = td['pixels'].permute(0, 3, 1, 2).squeeze(0)
+        td['pixels'][pinky_tiles == 1] = red.to(device)
         return td
 
     @_apply_to_composite
@@ -439,9 +499,9 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--device', default='cpu', help="cuda or cpu")
     parser.add_argument('--seed', type=int, default=42, help="seed (defaults 42)")
-    parser.add_argument('--env_batch_size', type=int, default=16, help="number of environments")
-    parser.add_argument('--steps_per_batch', type=int, default=32, help="number of steps to take in env per batch")
-    parser.add_argument('--train_steps', type=int, default=3e4, help="number of PPO updates to run")
+    parser.add_argument('--env_batch_size', type=int, default=2048, help="number of environments")
+    parser.add_argument('--steps_per_batch', type=int, default=8, help="number of steps to take in env per batch")
+    parser.add_argument('--train_steps', type=int, default=1000, help="number of PPO updates to run")
     parser.add_argument('--clip_epsilon', type=float, default=0.1, help="PPO clipping parameter")
     parser.add_argument('--gamma', type=float, default=0.99, help="GAE gamma parameter")
     parser.add_argument('--lmbda', type=float, default=0.99, help="GAE lambda parameter")
@@ -451,8 +511,8 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=1e-3, help="Adam learning rate")
     parser.add_argument('--lr_sched_step_size', type=int, default=1e5, help="decay lr after this many steps")
     parser.add_argument('--lr_sched_gamma', type=int, default=0.7, help="decay lr after this many steps")
-    parser.add_argument('--ppo_steps', type=int, default=4, help="number of ppo updates per batch")
-    parser.add_argument('--eval_freq', type=int, default=5000, help="run eval after this many training steps")
+    parser.add_argument('--ppo_steps', type=int, default=6, help="number of ppo updates per batch")
+    parser.add_argument('--eval_freq', type=int, default=100, help="run eval after this many training steps")
     parser.add_argument('--eval_len', type=int, default=1000, help="run eval after this many training steps")
     parser.add_argument('--demo', action='store_true', help="command switch to visualize after training completes")
     parser.add_argument('--log_train_video', action='store_true', help='enable video logging')
@@ -519,8 +579,6 @@ if __name__ == '__main__':
             out_key='flat_obs'
         ))
         env.append_transform(CenterPlayerTransform(
-            in_keys=['wall_tiles', 'reward_tiles', 'terminal_tiles'],
-            out_keys=['c_wall_tiles', 'c_reward_tiles', 'c_terminal_tiles'],
             patch_radius=4
         ))
         env.append_transform(StepCounter())

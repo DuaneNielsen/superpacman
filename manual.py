@@ -5,7 +5,13 @@ import torch
 from torchrl.envs import TransformedEnv, check_env_specs, step_mdp
 from torchvision.utils import make_grid
 import matplotlib
+from argparse import ArgumentParser
+
 matplotlib.use('TkAgg')
+
+parser = ArgumentParser()
+parser.add_argument('--partial_size', type=int, default=0)
+args = parser.parse_args()
 
 keymap = {"up": Actions.N, "right": Actions.E, "down": Actions.S, "left": Actions.W}
 
@@ -13,14 +19,15 @@ env = Gridworld(batch_size=torch.Size([2]))
 env = TransformedEnv(
     env
 )
-env.append_transform(CenterPlayerTransform(
-    in_keys=['wall_tiles', 'reward_tiles', 'terminal_tiles'],
-    out_keys=['c_wall_tiles', 'c_reward_tiles', 'c_terminal_tiles'],
-    patch_radius=4
-))
 
-# env.append_transform(RGBFullObsTransform())
-env.append_transform(RGBPartialObsTransform())
+if args.partial_size > 0:
+    env.append_transform(CenterPlayerTransform(
+        patch_radius=args.partial_size,
+    ))
+    env.append_transform(RGBPartialObsTransform())
+else:
+    env.append_transform(RGBFullObsTransform())
+
 check_env_specs(env)
 
 global td
