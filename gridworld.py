@@ -64,18 +64,23 @@ action_vec = torch.stack(
 yellow = tensor([255, 255, 0], dtype=torch.uint8)
 red = tensor([255, 0, 0], dtype=torch.uint8)
 green = tensor([0, 255, 0], dtype=torch.uint8)
+blue = tensor([0, 0, 255], dtype=torch.uint8)
 pink = tensor([255, 0, 255], dtype=torch.uint8)
 violet = tensor([226, 43, 138], dtype=torch.uint8)
 white = tensor([255, 255, 255], dtype=torch.uint8)
 gray = tensor([128, 128, 128], dtype=torch.uint8)
 light_gray = tensor([211, 211, 211], dtype=torch.uint8)
-blue = tensor([0, 0, 255], dtype=torch.uint8)
+energizer_color = tensor([255, 216, 0], dtype=torch.uint8)
+blinky_color = tensor([255, 0, 0], dtype=torch.uint8)
+pinky_color = tensor([255, 180, 255], dtype=torch.uint8)
+inky_color = tensor([0, 255, 255], dtype=torch.uint8)
+claude_color = tensor([255, 184, 81], dtype=torch.uint8)
 
 
 def pos_to_grid(pos, H, W, device='cpu', dtype=torch.float32):
     """
     Converts positions to grid where 1 indicates a position
-    :param pos: N, 2 tensor of grid positions (x = H, y = W) or 2 tensor
+    :param pos: N, ..., 2 tensor of grid positions (x = H, y = W) or 2 tensor
     :param H: height
     :param W: width
     :param: device: device
@@ -83,14 +88,16 @@ def pos_to_grid(pos, H, W, device='cpu', dtype=torch.float32):
     :return: N, H, W tensor or single H, W tensor
     """
 
-    if len(pos.shape) == 2:
-        N = pos.size(0)
-        batch_range = torch.arange(N, device=device)
-        grid = torch.zeros((N, H, W), dtype=dtype, device=device)
-        grid[batch_range, pos[:, 0], pos[:, 1]] = 1.
-    else:
+    if len(pos.shape) == 1:
         grid = torch.zeros((H, W), dtype=dtype, device=device)
         grid[pos[0], pos[1]] = 1.
+        return grid
+
+    N = pos.shape[0]
+    batch_shape = tuple([N] + [1] * (len(pos.shape) - 1))
+    batch_range = torch.arange(N, device=device).view(*batch_shape)
+    grid = torch.zeros((N, H, W), dtype=dtype, device=device)
+    grid[batch_range, pos[..., 0].unsqueeze(-1), pos[..., 1].unsqueeze(-1)] = 1
     return grid
 
 
@@ -109,26 +116,30 @@ def _step(state):
     ghost_pos = state['ghost_pos']
     player_pos = state['player_pos']
     energized = state['energized_t'] > 0
+    ghost_wait_t = state['ghost_wait_t']
     t = state['t']
-
-    # ghost mode
 
     # 4 ghost candidate positions, N, G, Pos, xy
     candidate_tile_pos = direction.view(1, 1, 4, 2) + ghost_pos.view(N, G, 1, 2)
     candidate_tile_pos = candidate_tile_pos % H
     is_wall = wall_tiles[batch_range.view(N, 1, 1), candidate_tile_pos[..., 0], candidate_tile_pos[..., 1]]
 
-    chase_targets = torch.zeros(N, G, 2, dtype=torch.int64, device=device)
-    chase_targets[batch_range.view(N), Ghost.BLINKY] = player_pos
-    chase_targets[batch_range.view(N), Ghost.PINKY] = player_pos + direction[action] * 4
-
-    wait_targets = tensor([7, 10], dtype=torch.int64, device=device).expand(N, G, 2)
-
-    # scatter mode based on gimer
+    # scatter mode based on timer
     scatter_targets = tensor([
-        [-3, 20],
-        [-3, 0],
+        [-3, 19],
+        [-3, 1],
+        [21, 20],
+        [21, 0]
     ], dtype=torch.int64, device=device).expand(N, G, 2)
+
+    chase_targets = torch.zeros(N, G, 2, dtype=torch.int64, device=device)
+    chase_targets[batch_range, Ghost.BLINKY] = player_pos
+    chase_targets[batch_range, Ghost.PINKY] = player_pos + direction[action] * 4
+    pacman_pred_2 = player_pos + direction[action] * 2
+    chase_targets[batch_range, Ghost.INKY] = (pacman_pred_2 + ghost_pos[batch_range, Ghost.BLINKY]) // 2
+    claude_pacman_dist = (player_pos - ghost_pos[batch_range, Ghost.CLAUDE]) ** 2
+    chase_targets[batch_range, Ghost.CLAUDE] = torch.where(claude_pacman_dist < 64, scatter_targets[batch_range, Ghost.CLAUDE], player_pos)
+
     scatter = (t % 27 <= 7) & (t < 27 * 3)
     targets = torch.where(scatter.view(N, 1, 1), scatter_targets, chase_targets)
 
@@ -136,7 +147,7 @@ def _step(state):
     candidate_tile_dist = torch.sum((targets.view(N, G, 1, 2) - candidate_tile_pos) ** 2, dim=-1)
 
     # if pacman is energized, ghosts are frightened, and go in random directions
-    random_tile_weights = torch.randint_like(candidate_tile_dist, low=0, high=big_distance-1)
+    random_tile_weights = torch.randint_like(candidate_tile_dist, low=0, high=big_distance - 1)
     candidate_tile_dist = torch.where(energized.view(N, 1, 1), random_tile_weights, candidate_tile_dist)
 
     # add a big distance if it's a wall so it will be no bueuno
@@ -151,9 +162,20 @@ def _step(state):
     next_ghost_pos = ghost_pos + direction[ghost_direction]
     next_ghost_pos = next_ghost_pos % H
 
+    wait_pos = tensor([7, 10], dtype=torch.int64, device=device).expand(N, G, 2)
+
+    dots_remaining = state['reward_tiles'].sum(-1).sum(-1)
+    next_ghost_pos = torch.where(ghost_wait_t.view(N, G, 1) > 0, wait_pos, next_ghost_pos)
+    next_ghost_pos[batch_range, Ghost.INKY] = torch.where(dots_remaining.view(N, 1) > 176 - 30, wait_pos[batch_range, Ghost.INKY], next_ghost_pos[batch_range, Ghost.INKY])
+    next_ghost_pos[batch_range, Ghost.CLAUDE] = torch.where(dots_remaining.view(N, 1) > 176 - 60, wait_pos[batch_range, Ghost.CLAUDE], next_ghost_pos[batch_range, Ghost.CLAUDE])
+
     # write the grids for each ghost
-    blinky_tiles = pos_to_grid(next_ghost_pos[:, 0], H, W, device=device, dtype=dtype)
-    pinky_tiles = pos_to_grid(next_ghost_pos[:, 1], H, W, device=device, dtype=dtype)
+    blinky_tiles = pos_to_grid(next_ghost_pos[:, Ghost.BLINKY], H, W, device=device, dtype=dtype)
+    pinky_tiles = pos_to_grid(next_ghost_pos[:, Ghost.PINKY], H, W, device=device, dtype=dtype)
+    inky_tiles = pos_to_grid(next_ghost_pos[:, Ghost.INKY], H, W, device=device, dtype=dtype)
+    claude_tiles = pos_to_grid(next_ghost_pos[:, Ghost.CLAUDE], H, W, device=device, dtype=dtype)
+    frightened_tiles = pos_to_grid(next_ghost_pos, H, W, device=device, dtype=dtype)
+    frightened_tiles = frightened_tiles * energized.view(N, 1, 1)
 
     # move player position checking for collisions
     next_player_pos = player_pos + direction[action]
@@ -175,8 +197,10 @@ def _step(state):
     energized = state['energized_t'] > 0
 
     # resolve collisions
-    collide = torch.logical_or(ghost_pos == player_pos.view(N, 1, 2), next_ghost_pos == player_pos.view(N, 1, 2))
-    terminated = collide.all(-1).any(-1) & ~ energized.squeeze()
+    collide = torch.logical_or((ghost_pos == player_pos.view(N, 1, 2)).all(-1),
+                               (next_ghost_pos == player_pos.view(N, 1, 2)).all(-1))
+    terminated = collide.any(-1) & ~ energized.squeeze()
+    ghost_wait_t[collide & energized] = 7
 
     out = {
         't': t + 1,
@@ -185,8 +209,12 @@ def _step(state):
         'player_tiles': player_tiles,
         'ghost_pos': next_ghost_pos,
         'ghost_dir': ghost_direction,
+        "ghost_wait_t": ghost_wait_t - 1,
         'blinky_tiles': blinky_tiles,
         'pinky_tiles': pinky_tiles,
+        'inky_tiles': inky_tiles,
+        'claude_tiles': claude_tiles,
+        'frightened_tiles': frightened_tiles,
         'wall_tiles': state['wall_tiles'],
         'reward_tiles': state['reward_tiles'],
         'energizer_tiles': state['energizer_tiles'],
@@ -302,11 +330,15 @@ def gen_params(batch_size=None):
 
     H, W = walls.shape
     player_pos = tensor([15, 10], dtype=torch.int64)
-    ghost_pos = tensor([[7, 10], [7, 10]], dtype=torch.int64)
-    ghost_dir = tensor([Actions.W, Actions.W], dtype=torch.int64)
+    ghost_pos = tensor([[7, 10], [7, 10], [7, 10], [7, 10]], dtype=torch.int64)
+    ghost_dir = tensor([Actions.W] * len(Ghost), dtype=torch.int64)
+    ghost_wait_t = torch.zeros(len(Ghost), dtype=torch.int64)
     player_tiles = pos_to_grid(player_pos, H, W, dtype=walls.dtype)
-    blinky_tiles = pos_to_grid(ghost_pos[0], H, W, dtype=walls.dtype)
-    pinky_tiles = pos_to_grid(ghost_pos[1], H, W, dtype=walls.dtype)
+    blinky_tiles = pos_to_grid(ghost_pos[Ghost.BLINKY], H, W, dtype=walls.dtype)
+    pinky_tiles = pos_to_grid(ghost_pos[Ghost.PINKY], H, W, dtype=walls.dtype)
+    inky_tiles = pos_to_grid(ghost_pos[Ghost.INKY], H, W, dtype=walls.dtype)
+    claude_tiles = pos_to_grid(ghost_pos[Ghost.CLAUDE], H, W, dtype=walls.dtype)
+    frightened_tiles = torch.zeros_like(walls)
     t = tensor([0], dtype=torch.int64)
     energized_t = tensor([0], dtype=torch.int64)
 
@@ -317,8 +349,12 @@ def gen_params(batch_size=None):
         "player_tiles": player_tiles,
         "ghost_pos": ghost_pos,
         "ghost_dir": ghost_dir,
+        "ghost_wait_t": ghost_wait_t,
         "blinky_tiles": blinky_tiles,
         "pinky_tiles": pinky_tiles,
+        "inky_tiles": inky_tiles,
+        "claude_tiles": claude_tiles,
+        "frightened_tiles": frightened_tiles,
         "wall_tiles": walls,
         "reward_tiles": rewards,
         "energizer_tiles": terminal_states
@@ -360,6 +396,18 @@ def _make_spec(self, td_params):
             shape=torch.Size(td_params['pinky_tiles'].shape),
             dtype=torch.float32,
         ),
+        inky_tiles=BoundedTensorSpec(
+            minimum=0,
+            maximum=1,
+            shape=torch.Size(td_params['inky_tiles'].shape),
+            dtype=torch.float32,
+        ),
+        claude_tiles=BoundedTensorSpec(
+            minimum=0,
+            maximum=1,
+            shape=torch.Size(td_params['claude_tiles'].shape),
+            dtype=torch.float32,
+        ),
         wall_tiles=BoundedTensorSpec(
             minimum=0,
             maximum=1,
@@ -376,16 +424,26 @@ def _make_spec(self, td_params):
             shape=torch.Size(td_params['energizer_tiles'].shape),
             dtype=torch.bool,
         ),
+        frightened_tiles=BoundedTensorSpec(
+            minimum=0,
+            maximum=1,
+            shape=torch.Size(td_params['frightened_tiles'].shape),
+            dtype=torch.float32,
+        ),
         player_pos=UnboundedDiscreteTensorSpec(
             shape=torch.Size((*batch_size, 2,)),
             dtype=torch.int64
         ),
         ghost_pos=UnboundedDiscreteTensorSpec(
-            shape=torch.Size((*batch_size, 2, 2)),
+            shape=torch.Size((*batch_size, len(Ghost), 2)),
             dtype=torch.int64
         ),
         ghost_dir=UnboundedDiscreteTensorSpec(
-            shape=torch.Size((*batch_size, 2)),
+            shape=torch.Size((*batch_size, len(Ghost))),
+            dtype=torch.int64
+        ),
+        ghost_wait_t=UnboundedDiscreteTensorSpec(
+            shape=torch.Size((*batch_size, len(Ghost))),
             dtype=torch.int64
         ),
         shape=torch.Size((*batch_size,))
@@ -422,9 +480,10 @@ class Gridworld(EnvBase):
 
 class CenterPlayerTransform(ObservationTransform):
     def __init__(self, patch_radius=2):
+        in_keys = ['wall_tiles', 'reward_tiles', 'energizer_tiles', 'pinky_tiles', 'blinky_tiles', 'inky_tiles', 'claude_tiles', 'frightened_tiles']
         super().__init__(
-            in_keys=['wall_tiles', 'reward_tiles', 'energizer_tiles', 'pinky_tiles', 'blinky_tiles'],
-            out_keys=['c_wall_tiles', 'c_reward_tiles', 'c_energizer_tiles', 'c_pinky_tiles', 'c_blinky_tiles'])
+            in_keys=in_keys,
+            out_keys=[f'c_{key}' for key in in_keys])
         self.size = patch_radius
 
     def forward(self, tensordict):
@@ -478,22 +537,21 @@ class RGBPartialObsTransform(ObservationTransform):
 
     def _call(self, td):
         walls = td['c_wall_tiles']
-        rewards = td['c_reward_tiles']
-        terminal = td['c_energizer_tiles']
-        blinky_tiles = td['c_blinky_tiles']
-        pinky_tiles = td['c_pinky_tiles']
         device = walls.device
-
         shape = *walls.shape, 3
         center_x, center_y = shape[1] // 2, shape[2] // 2
+
         td['pixels'] = torch.zeros(shape, dtype=torch.uint8, device=device)
-        td['pixels'][walls == 1] = light_gray.to(device)
-        td['pixels'][rewards > 0] = green.to(device)
-        td['pixels'][rewards < 0] = red.to(device)
-        td['pixels'][terminal == 1] = blue.to(device)
+        td['pixels'][td['c_wall_tiles'] == 1] = light_gray.to(device)
+        td['pixels'][td['c_reward_tiles'] > 0] = green.to(device)
+        td['pixels'][td['c_reward_tiles'] < 0] = red.to(device)
+        td['pixels'][td['c_energizer_tiles'] == 1] = energizer_color.to(device)
         td['pixels'][:, center_x, center_y] = yellow.to(device)
-        td['pixels'][blinky_tiles == 1] = red.to(device)
-        td['pixels'][pinky_tiles == 1] = pink.to(device)
+        td['pixels'][td['c_blinky_tiles'] == 1] = blinky_color.to(device)
+        td['pixels'][td['c_pinky_tiles'] == 1] = pinky_color.to(device)
+        td['pixels'][td['c_inky_tiles'] == 1] = inky_color.to(device)
+        td['pixels'][td['c_claude_tiles'] == 1] = claude_color.to(device)
+        td['pixels'][td['c_frightened_tiles'] == 1] = blue.to(device)
         return td
 
     @_apply_to_composite
@@ -524,23 +582,19 @@ class RGBFullObsTransform(ObservationTransform):
         return self._call(tensordict_reset)
 
     def _call(self, td):
-        player_tiles = td['player_tiles']
-        blinky_tiles = td['blinky_tiles']
-        pinky_tiles = td['pinky_tiles']
-        walls = td['wall_tiles']
-        rewards = td['reward_tiles']
-        terminal = td['energizer_tiles']
-        device = walls.device
-
-        shape = *walls.shape, 3
+        device = td['wall_tiles'].device
+        shape = *td['wall_tiles'].shape, 3
         td['pixels'] = torch.zeros(shape, dtype=torch.uint8, device=device)
-        td['pixels'][walls == 1] = light_gray.to(device)
-        td['pixels'][rewards > 0] = green.to(device)
-        td['pixels'][rewards < 0] = red.to(device)
-        td['pixels'][terminal == 1] = blue.to(device)
-        td['pixels'][player_tiles == 1] = yellow.to(device)
-        td['pixels'][blinky_tiles == 1] = red.to(device)
-        td['pixels'][pinky_tiles == 1] = pink.to(device)
+        td['pixels'][td['wall_tiles'] == 1] = light_gray.to(device)
+        td['pixels'][td['reward_tiles'] > 0] = green.to(device)
+        td['pixels'][td['reward_tiles'] < 0] = red.to(device)
+        td['pixels'][td['energizer_tiles'] == 1] = energizer_color.to(device)
+        td['pixels'][td['player_tiles'] == 1] = yellow.to(device)
+        td['pixels'][td['blinky_tiles'] == 1] = blinky_color.to(device)
+        td['pixels'][td['pinky_tiles'] == 1] = pinky_color.to(device)
+        td['pixels'][td['inky_tiles'] == 1] = inky_color.to(device)
+        td['pixels'][td['claude_tiles'] == 1] = claude_color.to(device)
+        td['pixels'][td['frightened_tiles'] == 1] = blue.to(device)
         return td
 
     @_apply_to_composite
@@ -638,12 +692,13 @@ if __name__ == '__main__':
         env.append_transform(FlattenObservation(
             -2, -1,
             in_keys=["player_tiles", "wall_tiles", "reward_tiles",
-                     'energizer_tiles'],
+                     'energizer_tiles', 'pinky_tiles', 'blinky_tiles', 'frightened_tiles'],
             out_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles",
-                      'flat_energizer_tiles']
+                      'flat_energizer_tiles', 'flat_pinky_tiles', 'flat_blinky_tiles', 'flat_frightened_tiles']
         ))
         env.append_transform(CatTensors(
-            in_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles", 'flat_energizer_tiles'],
+            in_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles",
+                     'flat_energizer_tiles', 'flat_pinky_tiles', 'flat_blinky_tiles', 'flat_frightened_tiles'],
             out_key='flat_obs'
         ))
         env.append_transform(CenterPlayerTransform(
