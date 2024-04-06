@@ -72,7 +72,6 @@ light_gray = tensor([211, 211, 211], dtype=torch.uint8)
 blue = tensor([0, 0, 255], dtype=torch.uint8)
 
 
-
 def pos_to_grid(pos, H, W, device='cpu', dtype=torch.float32):
     """
     Converts positions to grid where 1 indicates a position
@@ -95,7 +94,6 @@ def pos_to_grid(pos, H, W, device='cpu', dtype=torch.float32):
     return grid
 
 
-
 def _step(state):
     device = state.device
     N, H, W = state['wall_tiles'].shape
@@ -110,14 +108,15 @@ def _step(state):
     big_distance = H ** 2 + W ** 2
     ghost_pos = state['ghost_pos']
     player_pos = state['player_pos']
+    energized = state['energized_t'] > 0
     t = state['t']
 
     # ghost mode
 
-
     # 4 ghost candidate positions, N, G, Pos, xy
     candidate_tile_pos = direction.view(1, 1, 4, 2) + ghost_pos.view(N, G, 1, 2)
     candidate_tile_pos = candidate_tile_pos % H
+    is_wall = wall_tiles[batch_range.view(N, 1, 1), candidate_tile_pos[..., 0], candidate_tile_pos[..., 1]]
 
     chase_targets = torch.zeros(N, G, 2, dtype=torch.int64, device=device)
     chase_targets[batch_range.view(N), Ghost.BLINKY] = player_pos
@@ -134,8 +133,11 @@ def _step(state):
     # get the distance from each candidate to the target tile
     candidate_tile_dist = torch.sum((targets.view(N, G, 1, 2) - candidate_tile_pos) ** 2, dim=-1)
 
+    # if pacman is energized, ghosts go in random direction
+    random_tile_weights = torch.randint_like(candidate_tile_dist, low=0, high=big_distance-1)
+    candidate_tile_dist = torch.where(energized.view(N, 1, 1), random_tile_weights, candidate_tile_dist)
+
     # add a big distance if it's a wall so it will be no bueuno
-    is_wall = wall_tiles[batch_range.view(N, 1, 1), candidate_tile_pos[..., 0], candidate_tile_pos[..., 1]]
     candidate_tile_dist = candidate_tile_dist + is_wall * big_distance
 
     # ghosts cant reverse the direction of travel
@@ -163,12 +165,19 @@ def _step(state):
     reward = state['reward_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]]
     state['reward_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]] = 0.
 
+    # energized state
+    energized = state['energizer_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]]
+    state['energizer_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]] = 0.
+    state['energized_t'][energized == 1] = 7
+    state['energized_t'][state['energized_t'] < 0] = 0
+
     # terminate if a ghost moves into your tile
     terminated = (next_ghost_pos == player_pos.view(N, 1, 2)).all(-1).any(-1)
     terminated = (ghost_pos == player_pos.view(N, 1, 2)).all(-1).any(-1) | terminated
 
     out = {
         't': t + 1,
+        'energized_t': state['energized_t'] - 1,
         'player_pos': player_pos,
         'player_tiles': player_tiles,
         'ghost_pos': next_ghost_pos,
@@ -296,9 +305,11 @@ def gen_params(batch_size=None):
     blinky_tiles = pos_to_grid(ghost_pos[0], H, W, dtype=walls.dtype)
     pinky_tiles = pos_to_grid(ghost_pos[1], H, W, dtype=walls.dtype)
     t = tensor([0], dtype=torch.int64)
+    energized_t = tensor([0], dtype=torch.int64)
 
     state = {
         "t": t,
+        "energized_t": energized_t,
         "player_pos": player_pos,
         "player_tiles": player_tiles,
         "ghost_pos": ghost_pos,
@@ -321,6 +332,10 @@ def _make_spec(self, td_params):
     batch_size = td_params.shape
     self.observation_spec = CompositeSpec(
         t=UnboundedDiscreteTensorSpec(
+            shape=torch.Size((*batch_size, 1)),
+            dtype=torch.int64
+        ),
+        energized_t=UnboundedDiscreteTensorSpec(
             shape=torch.Size((*batch_size, 1)),
             dtype=torch.int64
         ),
@@ -427,7 +442,8 @@ class CenterPlayerTransform(ObservationTransform):
             indexes = player_coords + grid - self.size
             indexes = indexes % H
             batch_range = torch.arange(N, device=device)
-            td[out_key] = td[in_key][batch_range.view(N, 1), indexes[:, 0].flatten(-2), indexes[:, 1].flatten(-2)].view(N, max_x, max_y)
+            td[out_key] = td[in_key][batch_range.view(N, 1), indexes[:, 0].flatten(-2), indexes[:, 1].flatten(-2)].view(
+                N, max_x, max_y)
         return td
 
     @_apply_to_composite
