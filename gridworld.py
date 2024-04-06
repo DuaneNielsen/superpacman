@@ -123,6 +123,8 @@ def _step(state):
     chase_targets[batch_range.view(N), Ghost.PINKY] = player_pos + direction[action] * 4
 
     wait_targets = tensor([7, 10], dtype=torch.int64, device=device).expand(N, G, 2)
+
+    # scatter mode based on gimer
     scatter_targets = tensor([
         [-3, 20],
         [-3, 0],
@@ -133,7 +135,7 @@ def _step(state):
     # get the distance from each candidate to the target tile
     candidate_tile_dist = torch.sum((targets.view(N, G, 1, 2) - candidate_tile_pos) ** 2, dim=-1)
 
-    # if pacman is energized, ghosts go in random direction
+    # if pacman is energized, ghosts are frightened, and go in random directions
     random_tile_weights = torch.randint_like(candidate_tile_dist, low=0, high=big_distance-1)
     candidate_tile_dist = torch.where(energized.view(N, 1, 1), random_tile_weights, candidate_tile_dist)
 
@@ -166,14 +168,15 @@ def _step(state):
     state['reward_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]] = 0.
 
     # energized state
-    energized = state['energizer_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]]
+    ate_energizer = state['energizer_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]]
     state['energizer_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]] = 0.
-    state['energized_t'][energized == 1] = 7
+    state['energized_t'][ate_energizer == 1] = 7
     state['energized_t'][state['energized_t'] < 0] = 0
+    energized = state['energized_t'] > 0
 
-    # terminate if a ghost moves into your tile
-    terminated = (next_ghost_pos == player_pos.view(N, 1, 2)).all(-1).any(-1)
-    terminated = (ghost_pos == player_pos.view(N, 1, 2)).all(-1).any(-1) | terminated
+    # resolve collisions
+    collide = torch.logical_or(ghost_pos == player_pos.view(N, 1, 2), next_ghost_pos == player_pos.view(N, 1, 2))
+    terminated = collide.all(-1).any(-1) & ~ energized.squeeze()
 
     out = {
         't': t + 1,
