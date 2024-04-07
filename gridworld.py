@@ -737,7 +737,7 @@ if __name__ == '__main__':
         def __init__(self):
             super().__init__()
             self.layers = nn.Sequential(
-                nn.Conv2d(in_channels=3, out_channels=128, stride=1, kernel_size=3, padding=1),
+                nn.Conv2d(in_channels=8, out_channels=128, stride=1, kernel_size=3, padding=1),
                 nn.SELU(inplace=True),
                 nn.MaxPool2d(kernel_size=2, stride=2),
                 nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1),
@@ -745,8 +745,8 @@ if __name__ == '__main__':
                 nn.MaxPool2d(kernel_size=2, stride=2)
             )
 
-        def forward(self, wall_tiles, reward_tiles, player_tiles):
-            vision = torch.stack([wall_tiles, reward_tiles, player_tiles], dim=-3)
+        def forward(self, wall_tiles, reward_tiles, player_tiles, pinky_tiles, blinky_tiles, inky_tiles, claude_tiles, frightened_tiles):
+            vision = torch.stack([wall_tiles, reward_tiles, player_tiles, pinky_tiles, blinky_tiles, inky_tiles, claude_tiles, frightened_tiles], dim=-3)
             if len(vision.shape) == 5:
                 N, L, C, H, W = vision.shape
                 vision = vision.flatten(0, 1)
@@ -771,8 +771,8 @@ if __name__ == '__main__':
             )
             self.convblock = VGGConvBlock()
 
-        def forward(self, flat_obs, wall_tiles, reward_tiles, player_tiles):
-            conv_values = self.convblock(wall_tiles, reward_tiles, player_tiles)
+        def forward(self, flat_obs, wall_tiles, reward_tiles, player_tiles, pinky_tiles, blinky_tiles, inky_tiles, claude_tiles, frightened_tiles):
+            conv_values = self.convblock(wall_tiles, reward_tiles, player_tiles, pinky_tiles, blinky_tiles, inky_tiles, claude_tiles, frightened_tiles)
             features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
             values = self.net(features)
             return values
@@ -782,7 +782,7 @@ if __name__ == '__main__':
 
     value_module = ValueOperator(
         module=value_net,
-        in_keys=['flat_obs', 'c_wall_tiles', 'c_reward_tiles', 'c_energizer_tiles']
+        in_keys=['flat_obs', 'c_wall_tiles', 'c_reward_tiles', 'c_energizer_tiles', 'c_pinky_tiles', 'c_blinky_tiles', 'c_inky_tiles', 'c_claude_tiles', 'c_frightened_tiles']
     ).to(args.device)
 
 
@@ -800,8 +800,8 @@ if __name__ == '__main__':
             )
             self.convblock = VGGConvBlock()
 
-        def forward(self, flat_obs, wall_tiles, reward_tiles, player_tiles):
-            conv_values = self.convblock(wall_tiles, reward_tiles, player_tiles)
+        def forward(self, flat_obs, wall_tiles, reward_tiles, player_tiles, pinky_tiles, blinky_tiles, inky_tiles, claude_tiles, frightened_tiles):
+            conv_values = self.convblock(wall_tiles, reward_tiles, player_tiles, pinky_tiles, blinky_tiles, inky_tiles, claude_tiles, frightened_tiles)
             features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
             return log_softmax(self.net(features), dim=-1)
 
@@ -810,7 +810,7 @@ if __name__ == '__main__':
 
     policy_module = TensorDictModule(
         policy_net,
-        in_keys=['flat_obs', 'c_wall_tiles', 'c_reward_tiles', 'c_energizer_tiles'],
+        in_keys=['flat_obs', 'c_wall_tiles', 'c_reward_tiles', 'c_energizer_tiles', 'c_pinky_tiles', 'c_blinky_tiles', 'c_inky_tiles', 'c_claude_tiles', 'c_frightened_tiles'],
         out_keys=['logits'],
     )
 
