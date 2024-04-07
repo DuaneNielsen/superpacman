@@ -162,6 +162,10 @@ def _step(state):
     next_ghost_pos = ghost_pos + direction[ghost_direction]
     next_ghost_pos = next_ghost_pos % H
 
+    # frightened ghosts move at half speed
+    skip_turn = (t % 2 == 0) & energized
+    next_ghost_pos = torch.where(skip_turn.view(N, 1, 1), ghost_pos, next_ghost_pos)
+
     # the ghosts will be in the house if eaten or until a certain number of reward tiles are eaten
     wait_pos = tensor([[7, 10], [9, 10], [9, 9], [9, 11]], dtype=torch.int64, device=device).expand(N, G, 2)
     start_pos = tensor([[7, 10], [7, 10], [7, 10], [7, 10]], dtype=torch.int64, device=device).expand(N, G, 2)
@@ -170,6 +174,7 @@ def _step(state):
     ghost_wait_t[batch_range, Ghost.CLAUDE] = (dots_remaining != (176 - 60)) * ghost_wait_t[batch_range, Ghost.CLAUDE]
     next_ghost_pos = torch.where(ghost_wait_t.view(N, G, 1) > 0, wait_pos, next_ghost_pos)
     next_ghost_pos = torch.where(ghost_wait_t.view(N, G, 1) == 0, start_pos, next_ghost_pos)
+
 
     # write the grids for each ghost
     blinky_tiles = pos_to_grid(next_ghost_pos[:, Ghost.BLINKY], H, W, device=device, dtype=dtype)
@@ -194,7 +199,7 @@ def _step(state):
     # energized state
     ate_energizer = state['energizer_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]]
     state['energizer_tiles'][batch_range, player_pos[:, 0], player_pos[:, 1]] = 0.
-    state['energized_t'][ate_energizer == 1] = 7
+    state['energized_t'][ate_energizer == 1] = 8
     state['energized_t'][state['energized_t'] < 0] = 0
     energized = state['energized_t'] > 0
 
