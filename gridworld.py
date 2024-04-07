@@ -10,7 +10,7 @@ from torchrl.envs import (
 from torchrl.envs.transforms.transforms import _apply_to_composite, ObservationTransform
 from typing import Any, Dict, List, Optional, OrderedDict, Sequence, Tuple, Union
 from enum import IntEnum
-from torchvision.utils import draw_segmentation_masks
+
 
 """
 A minimal stateless vectorized gridworld in pytorch rl
@@ -63,13 +63,13 @@ action_vec = torch.stack(
 # colors for RGB image
 yellow = tensor([255, 255, 0], dtype=torch.uint8)
 red = tensor([255, 0, 0], dtype=torch.uint8)
-green = tensor([0, 255, 0], dtype=torch.uint8)
+food = tensor([100, 125, 125], dtype=torch.uint8)
 blue = tensor([0, 0, 255], dtype=torch.uint8)
 pink = tensor([255, 0, 255], dtype=torch.uint8)
 violet = tensor([226, 43, 138], dtype=torch.uint8)
 white = tensor([255, 255, 255], dtype=torch.uint8)
 gray = tensor([128, 128, 128], dtype=torch.uint8)
-light_gray = tensor([211, 211, 211], dtype=torch.uint8)
+wall_color = tensor([129, 129, 224], dtype=torch.uint8)
 energizer_color = tensor([255, 216, 0], dtype=torch.uint8)
 blinky_color = tensor([255, 0, 0], dtype=torch.uint8)
 pinky_color = tensor([255, 180, 255], dtype=torch.uint8)
@@ -162,12 +162,14 @@ def _step(state):
     next_ghost_pos = ghost_pos + direction[ghost_direction]
     next_ghost_pos = next_ghost_pos % H
 
-    wait_pos = tensor([7, 10], dtype=torch.int64, device=device).expand(N, G, 2)
-
+    # the ghosts will be in the house if eaten or until a certain number of reward tiles are eaten
+    wait_pos = tensor([[7, 10], [9, 10], [9, 9], [9, 11]], dtype=torch.int64, device=device).expand(N, G, 2)
+    start_pos = tensor([[7, 10], [7, 10], [7, 10], [7, 10]], dtype=torch.int64, device=device).expand(N, G, 2)
     dots_remaining = state['reward_tiles'].sum(-1).sum(-1)
+    ghost_wait_t[batch_range, Ghost.INKY] = (dots_remaining != (176 - 30)) * ghost_wait_t[batch_range, Ghost.INKY]
+    ghost_wait_t[batch_range, Ghost.CLAUDE] = (dots_remaining != (176 - 60)) * ghost_wait_t[batch_range, Ghost.CLAUDE]
     next_ghost_pos = torch.where(ghost_wait_t.view(N, G, 1) > 0, wait_pos, next_ghost_pos)
-    next_ghost_pos[batch_range, Ghost.INKY] = torch.where(dots_remaining.view(N, 1) > 176 - 30, wait_pos[batch_range, Ghost.INKY], next_ghost_pos[batch_range, Ghost.INKY])
-    next_ghost_pos[batch_range, Ghost.CLAUDE] = torch.where(dots_remaining.view(N, 1) > 176 - 60, wait_pos[batch_range, Ghost.CLAUDE], next_ghost_pos[batch_range, Ghost.CLAUDE])
+    next_ghost_pos = torch.where(ghost_wait_t.view(N, G, 1) == 0, start_pos, next_ghost_pos)
 
     # write the grids for each ghost
     blinky_tiles = pos_to_grid(next_ghost_pos[:, Ghost.BLINKY], H, W, device=device, dtype=dtype)
@@ -201,6 +203,7 @@ def _step(state):
                                (next_ghost_pos == player_pos.view(N, 1, 2)).all(-1))
     terminated = collide.any(-1) & ~ energized.squeeze()
     ghost_wait_t[collide & energized] = 7
+    reward += (collide & energized).any(-1) * 4
 
     out = {
         't': t + 1,
@@ -330,9 +333,9 @@ def gen_params(batch_size=None):
 
     H, W = walls.shape
     player_pos = tensor([15, 10], dtype=torch.int64)
-    ghost_pos = tensor([[7, 10], [7, 10], [7, 10], [7, 10]], dtype=torch.int64)
+    ghost_pos = tensor([[7, 10], [9, 10], [9, 9], [9, 11]], dtype=torch.int64)
     ghost_dir = tensor([Actions.W] * len(Ghost), dtype=torch.int64)
-    ghost_wait_t = torch.zeros(len(Ghost), dtype=torch.int64)
+    ghost_wait_t = tensor([-1, 1, -1, -1], dtype=torch.int64)
     player_tiles = pos_to_grid(player_pos, H, W, dtype=walls.dtype)
     blinky_tiles = pos_to_grid(ghost_pos[Ghost.BLINKY], H, W, dtype=walls.dtype)
     pinky_tiles = pos_to_grid(ghost_pos[Ghost.PINKY], H, W, dtype=walls.dtype)
@@ -542,8 +545,8 @@ class RGBPartialObsTransform(ObservationTransform):
         center_x, center_y = shape[1] // 2, shape[2] // 2
 
         td['pixels'] = torch.zeros(shape, dtype=torch.uint8, device=device)
-        td['pixels'][td['c_wall_tiles'] == 1] = light_gray.to(device)
-        td['pixels'][td['c_reward_tiles'] > 0] = green.to(device)
+        td['pixels'][td['c_wall_tiles'] == 1] = wall_color.to(device)
+        td['pixels'][td['c_reward_tiles'] > 0] = food.to(device)
         td['pixels'][td['c_reward_tiles'] < 0] = red.to(device)
         td['pixels'][td['c_energizer_tiles'] == 1] = energizer_color.to(device)
         td['pixels'][:, center_x, center_y] = yellow.to(device)
@@ -585,8 +588,8 @@ class RGBFullObsTransform(ObservationTransform):
         device = td['wall_tiles'].device
         shape = *td['wall_tiles'].shape, 3
         td['pixels'] = torch.zeros(shape, dtype=torch.uint8, device=device)
-        td['pixels'][td['wall_tiles'] == 1] = light_gray.to(device)
-        td['pixels'][td['reward_tiles'] > 0] = green.to(device)
+        td['pixels'][td['wall_tiles'] == 1] = wall_color.to(device)
+        td['pixels'][td['reward_tiles'] > 0] = food.to(device)
         td['pixels'][td['reward_tiles'] < 0] = red.to(device)
         td['pixels'][td['energizer_tiles'] == 1] = energizer_color.to(device)
         td['pixels'][td['player_tiles'] == 1] = yellow.to(device)
@@ -627,7 +630,7 @@ if __name__ == '__main__':
     parser.add_argument('--clip_epsilon', type=float, default=0.1, help="PPO clipping parameter")
     parser.add_argument('--gamma', type=float, default=0.99, help="GAE gamma parameter")
     parser.add_argument('--lmbda', type=float, default=0.99, help="GAE lambda parameter")
-    parser.add_argument('--entropy_eps', type=float, default=0.001, help="policy entropy bonus weight")
+    parser.add_argument('--entropy_eps', type=float, default=0.08, help="policy entropy bonus weight")
     parser.add_argument('--max_grad_norm', type=float, default=1.0, help="gradient clipping")
     parser.add_argument('--hidden_dim', type=int, default=64, help="hidden dim size of MLP")
     parser.add_argument('--lr', type=float, default=1e-3, help="Adam learning rate")
@@ -640,7 +643,7 @@ if __name__ == '__main__':
     parser.add_argument('--log_train_video', action='store_true', help='enable video logging')
     parser.add_argument('--log_eval_video', action='store_true', help='enable video logging during eval')
     parser.add_argument('--wandb', action='store_true', help='command switch to enable wandb logging')
-    parser.add_argument('--warmup_steps', type=int, default=3, help='delay before starting to learn')
+    parser.add_argument('--warmup_steps', type=int, default=16, help='delay before starting to learn')
     parser.add_argument('--load_checkpoint')
 
     args = parser.parse_args()
