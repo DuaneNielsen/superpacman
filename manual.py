@@ -36,20 +36,23 @@ td = env.reset()
 
 def on_press(event):
     global td
-    print('press', event.key, keymap[event.key])
-    sys.stdout.flush()
+    try:
+        print('press', event.key, keymap[event.key])
+        sys.stdout.flush()
 
-    td['action'] = torch.tensor([keymap[event.key], keymap[event.key]])
-    td = env.step(td)
-    td = step_mdp(td)
-    img_plt.set_data(td['pixels'][0])
-    fig.canvas.draw()
-
-    if td['terminated'][0]:
-        plt.pause(0.5)
-        td = env.reset()
+        td['action'] = torch.tensor([keymap[event.key], keymap[event.key]])
+        td = env.step(td)
+        td = step_mdp(td)
         img_plt.set_data(td['pixels'][0])
         fig.canvas.draw()
+
+        if td['terminated'][0]:
+            plt.pause(0.5)
+            td = env.reset()
+            img_plt.set_data(td['pixels'][0])
+            fig.canvas.draw()
+    except KeyError:
+        pass
 
 
 fig, ax = plt.subplots()
