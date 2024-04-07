@@ -643,7 +643,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr_sched_gamma', type=int, default=0.7, help="decay lr after this many steps")
     parser.add_argument('--ppo_steps', type=int, default=6, help="number of ppo updates per batch")
     parser.add_argument('--eval_freq', type=int, default=100, help="run eval after this many training steps")
-    parser.add_argument('--eval_len', type=int, default=1000, help="run eval after this many training steps")
+    parser.add_argument('--eval_len', type=int, default=400, help="run eval after this many training steps")
     parser.add_argument('--demo', action='store_true', help="command switch to visualize after training completes")
     parser.add_argument('--log_train_video', action='store_true', help='enable video logging')
     parser.add_argument('--log_eval_video', action='store_true', help='enable video logging during eval')
@@ -672,10 +672,12 @@ if __name__ == '__main__':
         RewardSum,
         TransformedEnv,
         FlattenObservation,
-        CatTensors
+        CatTensors,
+        Resize,
+        ToTensorImage,
+        PermuteTransform
     )
-    from torchrl.record import VideoRecorder
-    from csv import CSVLogger
+    from torchrl.record import VideoRecorder, CSVLogger
     from pathlib import Path
     from time import time
     from warnings import warn
@@ -718,6 +720,9 @@ if __name__ == '__main__':
         recorder = None
         if log_video:
             env.append_transform(RGBFullObsTransform())
+            env.append_transform(ToTensorImage(from_int=False))
+            env.append_transform(Resize(21*8, 21*8, in_keys=['pixels'], out_keys=['pixels'], interpolation='nearest'))
+            env.append_transform(PermuteTransform([-2, -1, -3], in_keys=['pixels'], out_keys=['pixels']))
             logger = CSVLogger(exp_name=exp_name, log_dir="logs", video_fps=3, video_format='mp4')
             recorder = VideoRecorder(logger=logger, tag='pacman', fps=3, skip=1)
             env.append_transform(recorder)
