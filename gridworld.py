@@ -948,8 +948,8 @@ if __name__ == '__main__':
                 "update_time": update_time,
             }, step=i)
 
-            train_reward_mean = epi_stats['train_reward_mean']
-            train_reward_max = epi_stats['train_reward_max']
+            train_reward_mean = epi_stats['train_episode_reward_mean']
+            train_reward_max = epi_stats['train_episode_reward_max']
 
         pbar.set_description(f'train reward mean/max {train_reward_mean:.2f} {train_reward_max:.2f} eval reward mean: {eval_reward_mean:.24}')
         pbar.update(tensordict_data.numel())
