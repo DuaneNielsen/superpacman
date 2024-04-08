@@ -931,6 +931,7 @@ if __name__ == '__main__':
                     f"{prefix}episode_reward_max": episode_reward.max().item(),
                     f"{prefix}episode_reward_stdev": torch.std(episode_reward).item(),
                     f"{prefix}step_count_max": step_count.max().item(),
+                    f"{prefix}step_count_mean": step_count.mean().item(),
                     f"{prefix}state_value_max": state_value.max().item(),
                     f"{prefix}state_value_mean": state_value.mean().item(),
                     f"{prefix}state_value_min": state_value.min().item(),
@@ -951,7 +952,7 @@ if __name__ == '__main__':
             train_reward_mean = epi_stats['train_episode_reward_mean']
             train_reward_max = epi_stats['train_episode_reward_max']
 
-        pbar.set_description(f'train reward mean/max {train_reward_mean:.2f} {train_reward_max:.2f} eval reward mean: {eval_reward_mean:.2f}')
+        pbar.set_description(f'train reward mean/max {train_reward_mean:.2f}/{train_reward_max:.2f} eval reward mean: {eval_reward_mean:.2f}')
         pbar.update(tensordict_data.numel())
 
         if i % args.eval_freq == 0:
