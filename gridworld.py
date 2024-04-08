@@ -60,21 +60,28 @@ action_vec = torch.stack(
     ]
 )
 
+
+def hex_to_rgb(hex_color):
+    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    return tensor([r, g, b], dtype=torch.uint8)
+
 # colors for RGB image
+
 yellow = tensor([255, 255, 0], dtype=torch.uint8)
 red = tensor([255, 0, 0], dtype=torch.uint8)
-food = tensor([100, 125, 125], dtype=torch.uint8)
 blue = tensor([0, 0, 255], dtype=torch.uint8)
 pink = tensor([255, 0, 255], dtype=torch.uint8)
 violet = tensor([226, 43, 138], dtype=torch.uint8)
 white = tensor([255, 255, 255], dtype=torch.uint8)
 gray = tensor([128, 128, 128], dtype=torch.uint8)
-wall_color = tensor([129, 129, 224], dtype=torch.uint8)
-energizer_color = tensor([255, 216, 0], dtype=torch.uint8)
+wall_color = hex_to_rgb("6E7C91")
+food = hex_to_rgb("91836E")
+energizer_color = hex_to_rgb("FF6B6B")
 blinky_color = tensor([255, 0, 0], dtype=torch.uint8)
 pinky_color = tensor([255, 180, 255], dtype=torch.uint8)
 inky_color = tensor([0, 255, 255], dtype=torch.uint8)
 claude_color = tensor([255, 184, 81], dtype=torch.uint8)
+blue = hex_to_rgb('0066FF')
 
 
 def pos_to_grid(pos, H, W, device='cpu', dtype=torch.float32):
@@ -900,8 +907,6 @@ if __name__ == '__main__':
     pbar = tqdm.tqdm(total=total_frames)
     train_reward_mean, train_reward_max, eval_reward_mean = 0., 0., 0.
     after_update = time()
-
-    fullobs_trans = RGBFullObsTransform()
 
     for i, tensordict_data in enumerate(collector):
         after_collect = time()
