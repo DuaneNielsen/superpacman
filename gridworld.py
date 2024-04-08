@@ -206,7 +206,9 @@ def _step(state):
     # resolve collisions
     collide = torch.logical_or((ghost_pos == player_pos.view(N, 1, 2)).all(-1),
                                (next_ghost_pos == player_pos.view(N, 1, 2)).all(-1))
-    terminated = collide.any(-1) & ~ energized.squeeze()
+
+    # terminate if we hit a ghost when not energized, or we got all the rewards
+    terminated = collide.any(-1) & ~ energized.squeeze() | (state['reward_tiles'].sum(-1).sum(-1) == 0)
     ghost_wait_t[collide & energized] = 7
     reward += (collide & energized).any(-1) * 4
 
@@ -898,6 +900,8 @@ if __name__ == '__main__':
     pbar = tqdm.tqdm(total=total_frames)
     train_reward_mean, train_reward_max, eval_reward_mean = 0., 0., 0.
     after_update = time()
+
+    fullobs_trans = RGBFullObsTransform()
 
     for i, tensordict_data in enumerate(collector):
         after_collect = time()
