@@ -655,7 +655,6 @@ if __name__ == '__main__':
 
     import tqdm
     import torch
-    from collections import defaultdict
     import torch.nn as nn
     from torch.optim import Adam
     from torch.optim.lr_scheduler import LambdaLR
@@ -874,6 +873,7 @@ if __name__ == '__main__':
     #     optim, step_size=args.lr_sched_step_size, gamma=args.lr_sched_gamma
     # )
 
+
     def save_checkpoint(filename):
         Path(filename).parent.mkdir(parents=True, exist_ok=True)
         torch.save({
@@ -895,9 +895,8 @@ if __name__ == '__main__':
     if args.load_checkpoint:
         load_checkpoint(args.load_checkpoint)
 
-    logs = defaultdict(list)
     pbar = tqdm.tqdm(total=total_frames)
-    eval_str = ""
+    train_reward_mean, train_reward_max, eval_reward_mean = 0., 0., 0.
     after_update = time()
 
     for i, tensordict_data in enumerate(collector):
@@ -906,12 +905,7 @@ if __name__ == '__main__':
         for _ in range(args.ppo_steps):
             advantage_module(tensordict_data)
             loss_vals = loss_module(tensordict_data)
-            loss_value = (
-                    loss_vals["loss_objective"]
-                    + loss_vals["loss_critic"]
-                    + loss_vals["loss_entropy"]
-            )
-
+            loss_value = (loss_vals["loss_objective"] + loss_vals["loss_critic"] + loss_vals["loss_entropy"])
             loss_value.backward()
             torch.nn.utils.clip_grad_norm_(loss_module.parameters(), args.max_grad_norm)
             optim.step()
@@ -920,7 +914,6 @@ if __name__ == '__main__':
         scheduler.step()
         after_update = time()
         update_time = after_update - after_collect
-
 
         def retrieve_episode_stats(tensordict_data, loss_value, prefix=None):
             with torch.no_grad():
@@ -942,9 +935,8 @@ if __name__ == '__main__':
                     f"{prefix}policy_entropy_value_min": entropy.min().item(),
                 }
 
-
-        epi_stats = retrieve_episode_stats(tensordict_data, loss_vals, 'train')
         if i % 10 == 0 and args.wandb:
+            epi_stats = retrieve_episode_stats(tensordict_data, loss_vals, 'train')
             wandb.log(epi_stats, step=i)
             wandb.log({
                 "learning rate": scheduler.get_last_lr()[0],
@@ -952,24 +944,11 @@ if __name__ == '__main__':
                 "update_time": update_time,
             }, step=i)
 
-        if args.log_train_video and i % 1000 == 0:
-            recorder.dump(suffix='train')
+            train_reward_mean = epi_stats['train_reward_mean']
+            train_reward_max = epi_stats['train_reward_max']
 
-        logs["reward"].append(tensordict_data["next", "reward"].mean().item())
-        logs["episode_reward"].append(epi_stats['train_episode_reward_mean'])
+        pbar.set_description(f'train reward mean/max {train_reward_mean:.2f} {train_reward_max:.2f} eval reward mean: {eval_reward_mean:.24}')
         pbar.update(tensordict_data.numel())
-
-        cum_reward_str = (
-            f"average reward={logs['reward'][-1]: 4.4f} (init={logs['reward'][0]: 4.4f})"
-        )
-
-        logs["step_count"].append(epi_stats['train_step_count_max'])
-
-        stepcount_str = f"step count (max): {logs['step_count'][-1]}"
-        logs["lr"].append(optim.param_groups[0]["lr"])
-        lr_str = f"lr policy: {logs['lr'][-1]: 4.4f}"
-
-        pbar.set_description(", ".join([eval_str, cum_reward_str, stepcount_str, lr_str]))
 
         if i % args.eval_freq == 0:
             with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
@@ -982,25 +961,14 @@ if __name__ == '__main__':
                 if args.wandb:
                     wandb.log(epi_stats, step=i)
 
-                logs["eval reward"].append(eval_rollout["next", "reward"].mean().item())
-                logs["eval reward (sum)"].append(
-                    eval_rollout["next", "reward"].sum().item()
-                )
-                logs["eval step_count"].append(eval_rollout["step_count"].max().item())
-                eval_str = (
-                    f"eval cumulative reward: {logs['eval reward (sum)'][-1]: 4.4f} "
-                    f"(init: {logs['eval reward (sum)'][0]: 4.4f}), "
-                    f"eval step-count: {logs['eval step_count'][-1]}"
-                )
-                del eval_rollout
-                reward_mean = epi_stats['eval_episode_reward_mean']
+                eval_reward_mean = epi_stats['eval_episode_reward_mean']
 
                 if args.log_eval_video:
                     pbar.set_description('writing video')
-                    eval_recorder.dump(suffix=f'eval_{reward_mean:.2f}')
+                    eval_recorder.dump(suffix=f'eval_{eval_reward_mean:.2f}')
 
-                pbar.set_description('saving checkpoint')
-                save_checkpoint(f'models/{exp_name}/checkpoint_{i // args.eval_freq}_{reward_mean:.2f}.pt')
+                pbar.set_description(f'saving checkpoint {eval_reward_mean:.2f}')
+                save_checkpoint(f'models/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
 
 
     def best_checkpt(directory):
