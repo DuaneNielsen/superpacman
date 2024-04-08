@@ -928,7 +928,7 @@ if __name__ == '__main__':
             with torch.no_grad():
                 prefix = '' if prefix is None else f"{prefix}_"
                 episode_reward = tensordict_data["next", "episode_reward"]
-                step_count = tensordict_data["step_count"]
+                step_count = tensordict_data["step_count"].float()
                 state_value = tensordict_data['state_value']
                 entropy = loss_value['entropy']
                 return {
@@ -936,7 +936,7 @@ if __name__ == '__main__':
                     f"{prefix}episode_reward_max": episode_reward.max().item(),
                     f"{prefix}episode_reward_stdev": torch.std(episode_reward).item(),
                     f"{prefix}step_count_max": step_count.max().item(),
-                    f"{prefix}step_count_mean": step_count.mode().item(),
+                    f"{prefix}step_count_mean": step_count.mean().item(),
                     f"{prefix}state_value_max": state_value.max().item(),
                     f"{prefix}state_value_mean": state_value.mean().item(),
                     f"{prefix}state_value_min": state_value.min().item(),
