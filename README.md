@@ -4,7 +4,10 @@ A stateless, vectorized implementation of pacman, implemented in pytorchRL
 
 
 
-https://github.com/DuaneNielsen/superpacman/assets/11070508/ba24e2cf-20ca-44ab-ae3f-ad631ed547a7
+
+
+https://github.com/DuaneNielsen/superpacman/assets/11070508/aaf61770-f7f7-4af8-b295-4b9ab4caa525
+
 
 
 
