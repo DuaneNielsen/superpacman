@@ -1,6 +1,6 @@
 import sys
 import matplotlib.pyplot as plt
-from gridworld import Gridworld, Actions, RGBFullObsTransform, CenterPlayerTransform, RGBPartialObsTransform
+from superpacman import Gridworld, Actions, RGBFullObsTransform, CenterPlayerTransform, RGBPartialObsTransform
 import torch
 from torchrl.envs import TransformedEnv, check_env_specs, step_mdp
 from torchvision.utils import make_grid
