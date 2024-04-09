@@ -2,7 +2,7 @@
 
 A stateless, vectorized implementation of pacman, implemented in pytorchRL
 
-
+![Video]([https://youtu.be/ipKug2QtlUw])
 
 Action space: (0, 1, 2, 3) -> N, E, S, W
 
