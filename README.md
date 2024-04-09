@@ -2,7 +2,11 @@
 
 A stateless, vectorized implementation of pacman, implemented in pytorchRL
 
-![Video](https://youtu.be/ipKug2QtlUw)
+
+
+https://github.com/DuaneNielsen/superpacman/assets/11070508/ba24e2cf-20ca-44ab-ae3f-ad631ed547a7
+
+
 
 Action space: (0, 1, 2, 3) -> N, E, S, W
 
