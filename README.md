@@ -5,8 +5,8 @@ A stateless, vectorized implementation of pacman, implemented in pytorchRL
 
 
 
+https://github.com/DuaneNielsen/superpacman/assets/11070508/6ede32de-1917-4702-bd38-0a5b978302d8
 
-https://github.com/DuaneNielsen/superpacman/assets/11070508/aaf61770-f7f7-4af8-b295-4b9ab4caa525
 
 
 
