@@ -126,12 +126,12 @@ def _step(state):
     ghost_wait_t = state['ghost_wait_t']
     t = state['t']
 
-    # 4 ghost candidate positions, N, G, Pos, xy
+    # 4 ghost candidate positions, N, G, A, xy
     candidate_tile_pos = direction.view(1, 1, 4, 2) + ghost_pos.view(N, G, 1, 2)
     candidate_tile_pos = candidate_tile_pos % H
     is_wall = wall_tiles[batch_range.view(N, 1, 1), candidate_tile_pos[..., 0], candidate_tile_pos[..., 1]]
 
-    # scatter mode based on timer
+    # scatter tiles are target tiles that cause the ghosts to go to their respective corners
     scatter_targets = tensor([
         [-3, 19],
         [-3, 1],
@@ -139,6 +139,7 @@ def _step(state):
         [21, 0]
     ], dtype=torch.int64, device=device).expand(N, G, 2)
 
+    # this is the core of the AI, each ghost has a different target tile
     chase_targets = torch.zeros(N, G, 2, dtype=torch.int64, device=device)
     chase_targets[batch_range, Ghost.BLINKY] = player_pos
     chase_targets[batch_range, Ghost.PINKY] = player_pos + direction[action] * 4
@@ -147,24 +148,26 @@ def _step(state):
     claude_pacman_dist = (player_pos - ghost_pos[batch_range, Ghost.CLAUDE]) ** 2
     chase_targets[batch_range, Ghost.CLAUDE] = torch.where(claude_pacman_dist < 64, scatter_targets[batch_range, Ghost.CLAUDE], player_pos)
 
+    # on a schedule, set the target tile to the ghosts scatter tile for 7 turns
     scatter = (t % 27 <= 7) & (t < 27 * 3)
     targets = torch.where(scatter.view(N, 1, 1), scatter_targets, chase_targets)
 
-    # get the distance from each candidate to the target tile
+    # get the distance from each candidate move to the target tile
+    # later the ghost will move to tile with the smallest value
     candidate_tile_dist = torch.sum((targets.view(N, G, 1, 2) - candidate_tile_pos) ** 2, dim=-1)
 
     # if pacman is energized, ghosts are frightened, and go in random directions
     random_tile_weights = torch.randint_like(candidate_tile_dist, low=0, high=big_distance - 1)
     candidate_tile_dist = torch.where(energized.view(N, 1, 1), random_tile_weights, candidate_tile_dist)
 
-    # add a big distance if it's a wall so it will be no bueuno
+    # add a big distance if the tile is a wall so the ghost won't consider it
     candidate_tile_dist = candidate_tile_dist + is_wall * big_distance
 
-    # ghosts cant reverse the direction of travel
+    # ghosts can't reverse the direction of travel, so add a big distance to the tile that would reverse direction
     rev_direction = (state['ghost_dir'] + 2) % 4
     candidate_tile_dist[batch_range.view(N, 1), ghost_range.view(1, G), rev_direction] = big_distance
 
-    # pick the best direction
+    # now finally, we can pick the ghosts direction, and start to calculate his next position
     distance, ghost_direction = torch.min(candidate_tile_dist, dim=-1)
     next_ghost_pos = ghost_pos + direction[ghost_direction]
     next_ghost_pos = next_ghost_pos % H
@@ -182,7 +185,6 @@ def _step(state):
     next_ghost_pos = torch.where(ghost_wait_t.view(N, G, 1) > 0, wait_pos, next_ghost_pos)
     next_ghost_pos = torch.where(ghost_wait_t.view(N, G, 1) == 0, start_pos, next_ghost_pos)
 
-
     # write the grids for each ghost
     blinky_tiles = pos_to_grid(next_ghost_pos[:, Ghost.BLINKY], H, W, device=device, dtype=dtype)
     pinky_tiles = pos_to_grid(next_ghost_pos[:, Ghost.PINKY], H, W, device=device, dtype=dtype)
@@ -191,7 +193,7 @@ def _step(state):
     frightened_tiles = pos_to_grid(next_ghost_pos, H, W, device=device, dtype=dtype)
     frightened_tiles = frightened_tiles * energized.view(N, 1, 1)
 
-    # move player position checking for collisions
+    # now we can move the player position checking for collisions
     next_player_pos = player_pos + direction[action]
     next_player_pos = next_player_pos % H
     next_player_grid = pos_to_grid(next_player_pos, H, W, device=device, dtype=torch.bool)
@@ -210,7 +212,7 @@ def _step(state):
     state['energized_t'][state['energized_t'] < 0] = 0
     energized = state['energized_t'] > 0
 
-    # resolve collisions
+    # check collisions
     collide = torch.logical_or((ghost_pos == player_pos.view(N, 1, 2)).all(-1),
                                (next_ghost_pos == player_pos.view(N, 1, 2)).all(-1))
 
