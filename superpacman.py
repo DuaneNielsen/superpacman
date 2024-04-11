@@ -968,11 +968,6 @@ if __name__ == '__main__':
 
     optim = Adam(loss_module.parameters(), lr=args.lr)
 
-
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-    #     optim, total_frames // frames_per_batch, 0.0
-    # )
-
     def warmup(current_step: int):
         if current_step < args.warmup_steps:
             return 0.
@@ -981,12 +976,6 @@ if __name__ == '__main__':
 
 
     scheduler = LambdaLR(optim, lr_lambda=warmup)
-
-
-    # scheduler = torch.optim.lr_scheduler.StepLR(
-    #     optim, step_size=args.lr_sched_step_size, gamma=args.lr_sched_gamma
-    # )
-
 
     def save_checkpoint(filename):
         Path(filename).parent.mkdir(parents=True, exist_ok=True)
@@ -1009,6 +998,7 @@ if __name__ == '__main__':
     if args.load_checkpoint:
         load_checkpoint(args.load_checkpoint)
 
+    # ready to start the training loop
     pbar = tqdm.tqdm(total=total_frames)
     train_reward_mean, train_reward_max, eval_reward_mean = 0., 0., 0.
     after_update = time()
@@ -1016,6 +1006,8 @@ if __name__ == '__main__':
     for i, tensordict_data in enumerate(collector):
         after_collect = time()
         env_time = after_collect - after_update
+
+        # PPO update
         for _ in range(args.ppo_steps):
             advantage_module(tensordict_data)
             loss_vals = loss_module(tensordict_data)
@@ -1029,6 +1021,7 @@ if __name__ == '__main__':
         after_update = time()
         update_time = after_update - after_collect
 
+        # and now for the logging
         def retrieve_episode_stats(tensordict_data, loss_value, prefix=None):
             with torch.no_grad():
                 prefix = '' if prefix is None else f"{prefix}_"
@@ -1065,6 +1058,7 @@ if __name__ == '__main__':
         pbar.set_description(f'train reward mean/max {train_reward_mean:.2f}/{train_reward_max:.2f} eval reward mean: {eval_reward_mean:.2f}')
         pbar.update(tensordict_data.numel())
 
+        # evaluation
         if i % args.eval_freq == 0:
             with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
                 pbar.set_description('starting eval rollout')
@@ -1081,7 +1075,7 @@ if __name__ == '__main__':
                 pbar.set_description(f'saving checkpoint {eval_reward_mean:.2f}')
                 save_checkpoint(f'models/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
 
-
+    # once training is done, write a video of the best policy we found
     def best_checkpt(directory):
         best_rew = -inf
         best_chkpt = None
@@ -1096,7 +1090,6 @@ if __name__ == '__main__':
                 warn(f'{reward_str} is not a valid float')
 
         return best_chkpt, best_rew
-
 
     best_chkpt, best_reward = best_checkpt(f'models/{exp_name}')
     if best_chkpt is not None:
