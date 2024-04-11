@@ -201,8 +201,6 @@ def _step(state):
     pinky_tiles = pos_to_grid(next_ghost_pos[:, Ghost.PINKY], H, W, device=device, dtype=dtype)
     inky_tiles = pos_to_grid(next_ghost_pos[:, Ghost.INKY], H, W, device=device, dtype=dtype)
     claude_tiles = pos_to_grid(next_ghost_pos[:, Ghost.CLAUDE], H, W, device=device, dtype=dtype)
-    frightened_tiles = pos_to_grid(next_ghost_pos, H, W, device=device, dtype=dtype)
-    frightened_tiles = frightened_tiles * energized.view(N, 1, 1)
 
     # now we can move the player position checking for collisions
     next_player_pos = player_pos + direction[action]
@@ -222,6 +220,9 @@ def _step(state):
     state['energized_t'][ate_energizer == 1] = 8
     state['energized_t'][state['energized_t'] < 0] = 0
     energized = state['energized_t'] > 0
+    frightened_tiles = pos_to_grid(next_ghost_pos, H, W, device=device, dtype=dtype)
+    frightened_tiles = frightened_tiles * (state['energized_t'] / 8).view(N, 1, 1)
+
 
     # check collisions
     collide = torch.logical_or((ghost_pos == player_pos.view(N, 1, 2)).all(-1),
@@ -580,7 +581,7 @@ class RGBPartialObsTransform(ObservationTransform):
         td['ego_pixels'][td['c_pinky_tiles'] == 1] = pinky_color.to(device)
         td['ego_pixels'][td['c_inky_tiles'] == 1] = inky_color.to(device)
         td['ego_pixels'][td['c_claude_tiles'] == 1] = claude_color.to(device)
-        td['ego_pixels'][td['c_frightened_tiles'] == 1] = blue.to(device)
+        td['ego_pixels'][td['c_frightened_tiles'] > 0] = blue.to(device)
         return td
 
     @_apply_to_composite
@@ -623,7 +624,7 @@ class RGBFullObsTransform(ObservationTransform):
         td['pixels'][td['pinky_tiles'] == 1] = pinky_color.to(device)
         td['pixels'][td['inky_tiles'] == 1] = inky_color.to(device)
         td['pixels'][td['claude_tiles'] == 1] = claude_color.to(device)
-        td['pixels'][td['frightened_tiles'] == 1] = blue.to(device)
+        td['pixels'][td['frightened_tiles'] > 0] = blue.to(device)
         return td
 
     @_apply_to_composite
