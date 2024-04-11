@@ -792,15 +792,6 @@ if __name__ == '__main__':
     from torchrl.objectives import ClipPPOLoss
     from torchrl.objectives.value import GAE
     from torchrl.envs.utils import check_env_specs, ExplorationType, set_exploration_type
-    from torchrl.envs import (
-        StepCounter,
-        RewardSum,
-        TransformedEnv,
-        Resize,
-        ToTensorImage,
-        PermuteTransform
-    )
-    from torchrl.record import VideoRecorder, CSVLogger
     from pathlib import Path
     from time import time
     from warnings import warn
