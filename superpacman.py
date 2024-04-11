@@ -785,6 +785,7 @@ if __name__ == '__main__':
     parser.add_argument('--wandb', action='store_true', help='command switch to enable wandb logging')
     parser.add_argument('--warmup_steps', type=int, default=16, help='delay before starting to learn')
     parser.add_argument('--load_checkpoint')
+    parser.add_argument('--enjoy_checkpoint')
 
     args = parser.parse_args()
 
@@ -996,6 +997,20 @@ if __name__ == '__main__':
         optim.load_state_dict(chkpt["optim_state_dict"])
         scheduler.load_state_dict(chkpt["scheduler_state_dict"])
 
+    def enjoy_checkpoint(chkpt, suffix):
+        with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
+            eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4,
+                                seed=args.seed, log_video=True)
+            print(f"rollout {suffix}")
+            load_checkpoint(chkpt)
+            eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
+            print("writing video")
+            eval_env.recorder.dump(suffix=suffix)
+
+    if args.enjoy_checkpoint:
+        filename = Path(args.enjoy_checkpoint).name
+        enjoy_checkpoint(args.enjoy_checkpoint, suffix=f'_{filename}')
+        exit()
 
     if args.load_checkpoint:
         load_checkpoint(args.load_checkpoint)
@@ -1097,17 +1112,9 @@ if __name__ == '__main__':
 
         return best_chkpt, best_rew
 
-
     best_chkpt, best_reward = best_checkpt(f'models/{exp_name}')
     if best_chkpt is not None:
-        with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
-            eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4,
-                                seed=args.seed, log_video=True)
-            load_checkpoint(best_chkpt)
-            pbar.set_description('rolling out best policy found')
-            eval_rollout = eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
-            pbar.set_description('writing video')
-            eval_env.recorder.dump(suffix=f'eval_{best_reward:.2f}')
+        enjoy_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}', msg='rolling out best policy found')
 
     # if args.demo:
     #   from matplotlib import pyplot as plt
