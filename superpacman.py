@@ -5,12 +5,12 @@ from torchrl.data import CompositeSpec, BoundedTensorSpec, UnboundedDiscreteTens
     DiscreteTensorSpec, \
     UnboundedContinuousTensorSpec
 from torchrl.envs import (
-    EnvBase,
+    EnvBase, UnsqueezeTransform, CatTensors, TransformedEnv
 )
 from torchrl.envs.transforms.transforms import _apply_to_composite, ObservationTransform
 from typing import Any, Dict, List, Optional, OrderedDict, Sequence, Tuple, Union
 from enum import IntEnum
-
+from math import prod
 
 """
 A minimal stateless vectorized gridworld in pytorch rl
@@ -60,16 +60,18 @@ action_vec = torch.stack(
     ]
 )
 
+tile_keys = ['player_tiles', 'wall_tiles', 'reward_tiles', 'energizer_tiles', 'pinky_tiles', 'blinky_tiles',
+             'inky_tiles', 'claude_tiles', 'frightened_tiles']
+egocentric_tile_keys = [f'c_{key}' for key in tile_keys]
 
 def hex_to_rgb(hex_color):
     r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
     return tensor([r, g, b], dtype=torch.uint8)
 
-# colors for RGB image
 
+# colors for RGB image
 yellow = tensor([255, 255, 0], dtype=torch.uint8)
 red = tensor([255, 0, 0], dtype=torch.uint8)
-blue = tensor([0, 0, 255], dtype=torch.uint8)
 pink = tensor([255, 0, 255], dtype=torch.uint8)
 violet = tensor([226, 43, 138], dtype=torch.uint8)
 white = tensor([255, 255, 255], dtype=torch.uint8)
@@ -477,7 +479,7 @@ def _set_seed(self, seed: Optional[int]):
     self.rng = rng
 
 
-class Gridworld(EnvBase):
+class SuperPacman(EnvBase):
     metadata = {
         "render_modes": ["human", ""],
         "render_fps": 30
@@ -499,10 +501,9 @@ class Gridworld(EnvBase):
 
 class CenterPlayerTransform(ObservationTransform):
     def __init__(self, patch_radius=2):
-        in_keys = ['wall_tiles', 'reward_tiles', 'energizer_tiles', 'pinky_tiles', 'blinky_tiles', 'inky_tiles', 'claude_tiles', 'frightened_tiles']
         super().__init__(
-            in_keys=in_keys,
-            out_keys=[f'c_{key}' for key in in_keys])
+            in_keys=tile_keys,
+            out_keys=[f'c_{key}' for key in tile_keys])
         self.size = patch_radius
 
     def forward(self, tensordict):
@@ -546,7 +547,7 @@ class RGBPartialObsTransform(ObservationTransform):
     """
 
     def __init__(self):
-        super().__init__(in_keys=['c_wall_tiles'], out_keys=['pixels'])
+        super().__init__(in_keys=['c_wall_tiles'], out_keys=['ego_pixels'])
 
     def forward(self, tensordict):
         return self._call(tensordict)
@@ -560,17 +561,17 @@ class RGBPartialObsTransform(ObservationTransform):
         shape = *walls.shape, 3
         center_x, center_y = shape[1] // 2, shape[2] // 2
 
-        td['pixels'] = torch.zeros(shape, dtype=torch.uint8, device=device)
-        td['pixels'][td['c_wall_tiles'] == 1] = wall_color.to(device)
-        td['pixels'][td['c_reward_tiles'] > 0] = food.to(device)
-        td['pixels'][td['c_reward_tiles'] < 0] = red.to(device)
-        td['pixels'][td['c_energizer_tiles'] == 1] = energizer_color.to(device)
-        td['pixels'][:, center_x, center_y] = yellow.to(device)
-        td['pixels'][td['c_blinky_tiles'] == 1] = blinky_color.to(device)
-        td['pixels'][td['c_pinky_tiles'] == 1] = pinky_color.to(device)
-        td['pixels'][td['c_inky_tiles'] == 1] = inky_color.to(device)
-        td['pixels'][td['c_claude_tiles'] == 1] = claude_color.to(device)
-        td['pixels'][td['c_frightened_tiles'] == 1] = blue.to(device)
+        td['ego_pixels'] = torch.zeros(shape, dtype=torch.uint8, device=device)
+        td['ego_pixels'][td['c_wall_tiles'] == 1] = wall_color.to(device)
+        td['ego_pixels'][td['c_reward_tiles'] > 0] = food.to(device)
+        td['ego_pixels'][td['c_reward_tiles'] < 0] = red.to(device)
+        td['ego_pixels'][td['c_energizer_tiles'] == 1] = energizer_color.to(device)
+        td['ego_pixels'][:, center_x, center_y] = yellow.to(device)
+        td['ego_pixels'][td['c_blinky_tiles'] == 1] = blinky_color.to(device)
+        td['ego_pixels'][td['c_pinky_tiles'] == 1] = pinky_color.to(device)
+        td['ego_pixels'][td['c_inky_tiles'] == 1] = inky_color.to(device)
+        td['ego_pixels'][td['c_claude_tiles'] == 1] = claude_color.to(device)
+        td['ego_pixels'][td['c_frightened_tiles'] == 1] = blue.to(device)
         return td
 
     @_apply_to_composite
@@ -628,6 +629,120 @@ class RGBFullObsTransform(ObservationTransform):
         )
 
 
+class FlatTileTransform(ObservationTransform):
+    """
+    takes all the input keys and outputs a single flat tensor
+    in_keys: tensors to use
+    out_keys: name of flat tensor, defautls to flat_obs
+    """
+    def __init__(self, in_keys, out_key='flat_obs'):
+        super().__init__(in_keys=in_keys, out_keys=out_key)
+
+    def forward(self, tensordict):
+        return self._call(tensordict)
+
+    def _reset(self, tensordict, tensordict_reset):
+        return self._call(tensordict_reset)
+
+    def _call(self, td):
+        td[self.out_keys[0]] = torch.cat([td[key].flatten(start_dim=1) for key in self.in_keys], dim=-1)
+        return td
+
+    @_apply_to_composite
+    def transform_observation_spec(self, observation_spec):
+        N, H, W = observation_spec.shape
+        S = 0
+        for key in self.in_keys:
+            S += prod(self.parent.full_observation_spec[key].shape[1:])
+        return BoundedTensorSpec(
+            minimum=0,
+            maximum=1,
+            shape=torch.Size((N, S)),
+            dtype=observation_spec.dtype,
+            device=observation_spec.device
+        )
+
+
+class StackTileTransform(ObservationTransform):
+    """
+    stacks all the in_keys into an N, C, H, W tensor and outputs it under the out_key
+    in_keys: must be N, H, W
+    out_key: string, default "image"
+    """
+
+    def __init__(self, in_keys, out_key='image'):
+        super().__init__(in_keys=in_keys, out_keys=out_key)
+
+    def forward(self, tensordict):
+        return self._call(tensordict)
+
+    def _reset(self, tensordict, tensordict_reset):
+        return self._call(tensordict_reset)
+
+    def _call(self, td):
+        td[self.out_keys[0]] = torch.stack([td[key] for key in self.in_keys], dim=-3)
+        return td
+
+    @_apply_to_composite
+    def transform_observation_spec(self, observation_spec):
+        N, H, W = observation_spec.shape
+        C = len(self.in_keys)
+        return BoundedTensorSpec(
+            minimum=0,
+            maximum=1,
+            shape=torch.Size((N, C, H, W)),
+            dtype=observation_spec.dtype,
+            device=observation_spec.device
+        )
+
+
+def make_env(env_batch_size, device='cpu', flat_obs=False, abs_image=False, ego_image=False,
+             ego_patch_radius=10, log_video=False, abs_pixel=False, ego_pixel=False, log_stats=True, seed=None):
+
+    assert env_batch_size > 1, "sorry, batch size 1 is not supported yet, try batch size 2"
+
+    env = SuperPacman(batch_size=torch.Size([env_batch_size]), device=device)
+    env = TransformedEnv(env)
+
+    if flat_obs:
+        env.append_transform(FlatTileTransform(tile_keys))
+
+    if abs_image:
+        env.append_transform(StackTileTransform(in_keys=tile_keys))
+
+    if ego_image:
+        env.append_transform(CenterPlayerTransform(patch_radius=ego_patch_radius))
+        env.append_transform(StackTileTransform(in_keys=egocentric_tile_keys, out_key='ego_image'))
+
+    if abs_pixel:
+        env.append_transform(RGBFullObsTransform())
+
+    if ego_pixel:
+        if not ego_image:
+            env.append_transform(CenterPlayerTransform(patch_radius=ego_patch_radius))
+        env.append_transform(RGBPartialObsTransform())
+
+    if log_video:
+        if not abs_pixel:
+            env.append_transform(RGBFullObsTransform())
+        env.append_transform(ToTensorImage(from_int=False))
+        env.append_transform(Resize(21*8, 21*8, in_keys=['pixels'], out_keys=['pixels'], interpolation='nearest'))
+        env.append_transform(PermuteTransform([-2, -1, -3], in_keys=['pixels'], out_keys=['pixels']))
+        logger = CSVLogger(exp_name=exp_name, log_dir="logs", video_fps=3, video_format='mp4')
+        recorder = VideoRecorder(logger=logger, tag='pacman', fps=3, skip=1)
+        env.append_transform(recorder)
+        env.recorder = recorder
+
+    if log_stats:
+        env.append_transform(StepCounter())
+        env.append_transform(RewardSum(reset_keys=['_reset']))
+
+    if seed is not None:
+        env.set_seed(seed)
+
+    return env
+
+
 if __name__ == '__main__':
 
     """
@@ -681,8 +796,6 @@ if __name__ == '__main__':
         StepCounter,
         RewardSum,
         TransformedEnv,
-        FlattenObservation,
-        CatTensors,
         Resize,
         ToTensorImage,
         PermuteTransform
@@ -704,55 +817,46 @@ if __name__ == '__main__':
     total_frames = args.env_batch_size * args.steps_per_batch * args.train_steps
 
 
-    def make_env(log_video, env_batch_size):
-        env = Gridworld(batch_size=torch.Size([env_batch_size]), device=args.device)
-        env = TransformedEnv(
-            env
-        )
-        env.append_transform(FlattenObservation(
-            -2, -1,
-            in_keys=["player_tiles", "wall_tiles", "reward_tiles",
-                     'energizer_tiles', 'pinky_tiles', 'blinky_tiles', 'frightened_tiles'],
-            out_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles",
-                      'flat_energizer_tiles', 'flat_pinky_tiles', 'flat_blinky_tiles', 'flat_frightened_tiles']
-        ))
-        env.append_transform(CatTensors(
-            in_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles",
-                     'flat_energizer_tiles', 'flat_pinky_tiles', 'flat_blinky_tiles', 'flat_frightened_tiles'],
-            out_key='flat_obs'
-        ))
-        env.append_transform(CenterPlayerTransform(
-            patch_radius=4
-        ))
-        env.append_transform(StepCounter())
-        env.append_transform(RewardSum(reset_keys=['_reset']))
+    # def make_env(log_video, env_batch_size):
+    #     env = SuperPacman(batch_size=torch.Size([env_batch_size]), device=args.device)
+    #     env = TransformedEnv(
+    #         env
+    #     )
+    #     env.append_transform(FlatTileTransform(tile_keys))
+    #     env.append_transform(CenterPlayerTransform(
+    #         patch_radius=4
+    #     ))
+    #     env.append_transform(StackTileTransform([f'c_{key}' for key in tile_keys]))
+    #     env.append_transform(StepCounter())
+    #     env.append_transform(RewardSum(reset_keys=['_reset']))
+    #
+    #     recorder = None
+    #     if log_video:
+    #         env.append_transform(RGBFullObsTransform())
+    #         env.append_transform(ToTensorImage(from_int=False))
+    #         env.append_transform(Resize(21*8, 21*8, in_keys=['pixels'], out_keys=['pixels'], interpolation='nearest'))
+    #         env.append_transform(PermuteTransform([-2, -1, -3], in_keys=['pixels'], out_keys=['pixels']))
+    #         logger = CSVLogger(exp_name=exp_name, log_dir="logs", video_fps=3, video_format='mp4')
+    #         recorder = VideoRecorder(logger=logger, tag='pacman', fps=3, skip=1)
+    #         env.append_transform(recorder)
+    #     check_env_specs(env)
+    #     env.set_seed(args.seed)
+    #     return env, recorder
 
-        recorder = None
-        if log_video:
-            env.append_transform(RGBFullObsTransform())
-            env.append_transform(ToTensorImage(from_int=False))
-            env.append_transform(Resize(21*8, 21*8, in_keys=['pixels'], out_keys=['pixels'], interpolation='nearest'))
-            env.append_transform(PermuteTransform([-2, -1, -3], in_keys=['pixels'], out_keys=['pixels']))
-            logger = CSVLogger(exp_name=exp_name, log_dir="logs", video_fps=3, video_format='mp4')
-            recorder = VideoRecorder(logger=logger, tag='pacman', fps=3, skip=1)
-            env.append_transform(recorder)
-        check_env_specs(env)
-        env.set_seed(args.seed)
-        return env, recorder
-
-
-    env, recorder = make_env(args.log_train_video, args.env_batch_size)
-    eval_env, eval_recorder = make_env(args.log_eval_video, 32)
+    env = make_env(args.env_batch_size, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4, seed=args.seed)
+    check_env_specs(env)
+    eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4, seed=args.seed)
 
     in_features = env.observation_spec['flat_obs'].shape[-1]
+    in_channels = env.observation_spec['ego_image'].shape[-3]
     actions_n = env.action_spec.n
 
 
     class VGGConvBlock(nn.Module):
-        def __init__(self):
+        def __init__(self, in_channels):
             super().__init__()
             self.layers = nn.Sequential(
-                nn.Conv2d(in_channels=8, out_channels=128, stride=1, kernel_size=3, padding=1),
+                nn.Conv2d(in_channels=in_channels, out_channels=128, stride=1, kernel_size=3, padding=1),
                 nn.SELU(inplace=True),
                 nn.MaxPool2d(kernel_size=2, stride=2),
                 nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1),
@@ -760,16 +864,15 @@ if __name__ == '__main__':
                 nn.MaxPool2d(kernel_size=2, stride=2)
             )
 
-        def forward(self, wall_tiles, reward_tiles, player_tiles, pinky_tiles, blinky_tiles, inky_tiles, claude_tiles, frightened_tiles):
-            vision = torch.stack([wall_tiles, reward_tiles, player_tiles, pinky_tiles, blinky_tiles, inky_tiles, claude_tiles, frightened_tiles], dim=-3)
-            if len(vision.shape) == 5:
-                N, L, C, H, W = vision.shape
-                vision = vision.flatten(0, 1)
-                vision = self.layers(vision)
-                vision = vision.unflatten(0, (N, L))
+        def forward(self, image):
+            if len(image.shape) == 5:
+                N, L, C, H, W = image.shape
+                image = image.flatten(0, 1)
+                image = self.layers(image)
+                image = image.unflatten(0, (N, L))
             else:
-                vision = self.layers(vision)
-            return vision
+                image = self.layers(image)
+            return image
 
 
     class Value(nn.Module):
@@ -777,27 +880,27 @@ if __name__ == '__main__':
         MLP value function
         """
 
-        def __init__(self, in_features, hidden_dim):
+        def __init__(self, in_features, in_channels, hidden_dim):
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
                 nn.ReLU(),
                 nn.Linear(in_features=hidden_dim, out_features=1, bias=False)
             )
-            self.convblock = VGGConvBlock()
+            self.convblock = VGGConvBlock(in_channels)
 
-        def forward(self, flat_obs, wall_tiles, reward_tiles, player_tiles, pinky_tiles, blinky_tiles, inky_tiles, claude_tiles, frightened_tiles):
-            conv_values = self.convblock(wall_tiles, reward_tiles, player_tiles, pinky_tiles, blinky_tiles, inky_tiles, claude_tiles, frightened_tiles)
+        def forward(self, flat_obs, image):
+            conv_values = self.convblock(image)
             features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
             values = self.net(features)
             return values
 
 
-    value_net = Value(in_features=in_features, hidden_dim=args.hidden_dim)
+    value_net = Value(in_features=in_features, in_channels=in_channels, hidden_dim=args.hidden_dim)
 
     value_module = ValueOperator(
         module=value_net,
-        in_keys=['flat_obs', 'c_wall_tiles', 'c_reward_tiles', 'c_energizer_tiles', 'c_pinky_tiles', 'c_blinky_tiles', 'c_inky_tiles', 'c_claude_tiles', 'c_frightened_tiles']
+        in_keys=['flat_obs', 'ego_image']
     ).to(args.device)
 
 
@@ -806,26 +909,26 @@ if __name__ == '__main__':
         Policy network for flat observation
         """
 
-        def __init__(self, in_features, hidden_dim, actions_n):
+        def __init__(self, in_features, in_channels, hidden_dim, actions_n):
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
                 nn.ReLU(),
                 nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
             )
-            self.convblock = VGGConvBlock()
+            self.convblock = VGGConvBlock(in_channels)
 
-        def forward(self, flat_obs, wall_tiles, reward_tiles, player_tiles, pinky_tiles, blinky_tiles, inky_tiles, claude_tiles, frightened_tiles):
-            conv_values = self.convblock(wall_tiles, reward_tiles, player_tiles, pinky_tiles, blinky_tiles, inky_tiles, claude_tiles, frightened_tiles)
+        def forward(self, flat_obs, image):
+            conv_values = self.convblock(image)
             features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
             return log_softmax(self.net(features), dim=-1)
 
 
-    policy_net = Policy(in_features, args.hidden_dim, actions_n)
+    policy_net = Policy(in_features, in_channels, args.hidden_dim, actions_n)
 
     policy_module = TensorDictModule(
         policy_net,
-        in_keys=['flat_obs', 'c_wall_tiles', 'c_reward_tiles', 'c_energizer_tiles', 'c_pinky_tiles', 'c_blinky_tiles', 'c_inky_tiles', 'c_claude_tiles', 'c_frightened_tiles'],
+        in_keys=['flat_obs', 'ego_image'],
         out_keys=['logits'],
     )
 
@@ -975,10 +1078,6 @@ if __name__ == '__main__':
 
                 eval_reward_mean = epi_stats['eval_episode_reward_mean']
 
-                if args.log_eval_video:
-                    pbar.set_description('writing video')
-                    eval_recorder.dump(suffix=f'eval_{eval_reward_mean:.2f}')
-
                 pbar.set_description(f'saving checkpoint {eval_reward_mean:.2f}')
                 save_checkpoint(f'models/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
 
@@ -1002,12 +1101,12 @@ if __name__ == '__main__':
     best_chkpt, best_reward = best_checkpt(f'models/{exp_name}')
     if best_chkpt is not None:
         with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
-            eval_env, eval_recorder = make_env(True, 32)
+            eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4, seed=args.seed, log_video=True)
             load_checkpoint(best_chkpt)
             pbar.set_description('rolling out best policy found')
             eval_rollout = eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
             pbar.set_description('writing video')
-            eval_recorder.dump(suffix=f'eval_{best_reward:.2f}')
+            eval_env.recorder.dump(suffix=f'eval_{best_reward:.2f}')
 
     # if args.demo:
     #   from matplotlib import pyplot as plt
