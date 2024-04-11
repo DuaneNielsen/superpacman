@@ -5,8 +5,15 @@ from torchrl.data import CompositeSpec, BoundedTensorSpec, UnboundedDiscreteTens
     DiscreteTensorSpec, \
     UnboundedContinuousTensorSpec
 from torchrl.envs import (
-    EnvBase, UnsqueezeTransform, CatTensors, TransformedEnv
+    EnvBase,
+    StepCounter,
+    RewardSum,
+    TransformedEnv,
+    Resize,
+    ToTensorImage,
+    PermuteTransform
 )
+from torchrl.record import VideoRecorder, CSVLogger
 from torchrl.envs.transforms.transforms import _apply_to_composite, ObservationTransform
 from typing import Any, Dict, List, Optional, OrderedDict, Sequence, Tuple, Union
 from enum import IntEnum
@@ -64,8 +71,9 @@ tile_keys = ['player_tiles', 'wall_tiles', 'reward_tiles', 'energizer_tiles', 'p
              'inky_tiles', 'claude_tiles', 'frightened_tiles']
 egocentric_tile_keys = [f'c_{key}' for key in tile_keys]
 
+
 def hex_to_rgb(hex_color):
-    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    r, g, b = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
     return tensor([r, g, b], dtype=torch.uint8)
 
 
@@ -148,7 +156,8 @@ def _step(state):
     pacman_pred_2 = player_pos + direction[action] * 2
     chase_targets[batch_range, Ghost.INKY] = (pacman_pred_2 + ghost_pos[batch_range, Ghost.BLINKY]) // 2
     claude_pacman_dist = (player_pos - ghost_pos[batch_range, Ghost.CLAUDE]) ** 2
-    chase_targets[batch_range, Ghost.CLAUDE] = torch.where(claude_pacman_dist < 64, scatter_targets[batch_range, Ghost.CLAUDE], player_pos)
+    chase_targets[batch_range, Ghost.CLAUDE] = torch.where(claude_pacman_dist < 64,
+                                                           scatter_targets[batch_range, Ghost.CLAUDE], player_pos)
 
     # on a schedule, set the target tile to the ghosts scatter tile for 7 turns
     scatter = (t % 27 <= 7) & (t < 27 * 3)
@@ -635,6 +644,7 @@ class FlatTileTransform(ObservationTransform):
     in_keys: tensors to use
     out_keys: name of flat tensor, defautls to flat_obs
     """
+
     def __init__(self, in_keys, out_key='flat_obs'):
         super().__init__(in_keys=in_keys, out_keys=out_key)
 
@@ -698,7 +708,6 @@ class StackTileTransform(ObservationTransform):
 
 def make_env(env_batch_size, device='cpu', flat_obs=False, abs_image=False, ego_image=False,
              ego_patch_radius=10, log_video=False, abs_pixel=False, ego_pixel=False, log_stats=True, seed=None):
-
     assert env_batch_size > 1, "sorry, batch size 1 is not supported yet, try batch size 2"
 
     env = SuperPacman(batch_size=torch.Size([env_batch_size]), device=device)
@@ -726,7 +735,7 @@ def make_env(env_batch_size, device='cpu', flat_obs=False, abs_image=False, ego_
         if not abs_pixel:
             env.append_transform(RGBFullObsTransform())
         env.append_transform(ToTensorImage(from_int=False))
-        env.append_transform(Resize(21*8, 21*8, in_keys=['pixels'], out_keys=['pixels'], interpolation='nearest'))
+        env.append_transform(Resize(21 * 8, 21 * 8, in_keys=['pixels'], out_keys=['pixels'], interpolation='nearest'))
         env.append_transform(PermuteTransform([-2, -1, -3], in_keys=['pixels'], out_keys=['pixels']))
         logger = CSVLogger(exp_name=exp_name, log_dir="logs", video_fps=3, video_format='mp4')
         recorder = VideoRecorder(logger=logger, tag='pacman', fps=3, skip=1)
@@ -807,7 +816,6 @@ if __name__ == '__main__':
     frames_per_batch = args.env_batch_size * args.steps_per_batch
     total_frames = args.env_batch_size * args.steps_per_batch * args.train_steps
 
-
     # def make_env(log_video, env_batch_size):
     #     env = SuperPacman(batch_size=torch.Size([env_batch_size]), device=args.device)
     #     env = TransformedEnv(
@@ -834,7 +842,8 @@ if __name__ == '__main__':
     #     env.set_seed(args.seed)
     #     return env, recorder
 
-    env = make_env(args.env_batch_size, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4, seed=args.seed)
+    env = make_env(args.env_batch_size, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4,
+                   seed=args.seed)
     check_env_specs(env)
     eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4, seed=args.seed)
 
@@ -959,6 +968,7 @@ if __name__ == '__main__':
 
     optim = Adam(loss_module.parameters(), lr=args.lr)
 
+
     def warmup(current_step: int):
         if current_step < args.warmup_steps:
             return 0.
@@ -967,6 +977,7 @@ if __name__ == '__main__':
 
 
     scheduler = LambdaLR(optim, lr_lambda=warmup)
+
 
     def save_checkpoint(filename):
         Path(filename).parent.mkdir(parents=True, exist_ok=True)
@@ -1012,6 +1023,7 @@ if __name__ == '__main__':
         after_update = time()
         update_time = after_update - after_collect
 
+
         # and now for the logging
         def retrieve_episode_stats(tensordict_data, loss_value, prefix=None):
             with torch.no_grad():
@@ -1034,6 +1046,7 @@ if __name__ == '__main__':
                     f"{prefix}policy_entropy_value_min": entropy.min().item(),
                 }
 
+
         if i % 10 == 0 and args.wandb:
             epi_stats = retrieve_episode_stats(tensordict_data, loss_vals, 'train')
             wandb.log(epi_stats, step=i)
@@ -1046,7 +1059,8 @@ if __name__ == '__main__':
             train_reward_mean = epi_stats['train_episode_reward_mean']
             train_reward_max = epi_stats['train_episode_reward_max']
 
-        pbar.set_description(f'train reward mean/max {train_reward_mean:.2f}/{train_reward_max:.2f} eval reward mean: {eval_reward_mean:.2f}')
+        pbar.set_description(
+            f'train reward mean/max {train_reward_mean:.2f}/{train_reward_max:.2f} eval reward mean: {eval_reward_mean:.2f}')
         pbar.update(tensordict_data.numel())
 
         # evaluation
@@ -1066,6 +1080,7 @@ if __name__ == '__main__':
                 pbar.set_description(f'saving checkpoint {eval_reward_mean:.2f}')
                 save_checkpoint(f'models/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
 
+
     # once training is done, write a video of the best policy we found
     def best_checkpt(directory):
         best_rew = -inf
@@ -1082,10 +1097,12 @@ if __name__ == '__main__':
 
         return best_chkpt, best_rew
 
+
     best_chkpt, best_reward = best_checkpt(f'models/{exp_name}')
     if best_chkpt is not None:
         with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
-            eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4, seed=args.seed, log_video=True)
+            eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4,
+                                seed=args.seed, log_video=True)
             load_checkpoint(best_chkpt)
             pbar.set_description('rolling out best policy found')
             eval_rollout = eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
