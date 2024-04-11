@@ -60,6 +60,10 @@ action_vec = torch.stack(
     ]
 )
 
+tile_keys = ['player_tiles', 'wall_tiles', 'reward_tiles', 'energizer_tiles', 'pinky_tiles', 'blinky_tiles',
+             'inky_tiles', 'claude_tiles', 'frightened_tiles']
+egocentric_tile_keys = [f'c_{key}' for key in tile_keys]
+
 
 def hex_to_rgb(hex_color):
     r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
@@ -711,14 +715,11 @@ if __name__ == '__main__':
         )
         env.append_transform(FlattenObservation(
             -2, -1,
-            in_keys=["player_tiles", "wall_tiles", "reward_tiles",
-                     'energizer_tiles', 'pinky_tiles', 'blinky_tiles', 'frightened_tiles'],
-            out_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles",
-                      'flat_energizer_tiles', 'flat_pinky_tiles', 'flat_blinky_tiles', 'flat_frightened_tiles']
+            in_keys=tile_keys,
+            out_keys=[f"flat_{key}" for key in tile_keys]
         ))
         env.append_transform(CatTensors(
-            in_keys=["flat_player_tiles", "flat_wall_tiles", "flat_reward_tiles",
-                     'flat_energizer_tiles', 'flat_pinky_tiles', 'flat_blinky_tiles', 'flat_frightened_tiles'],
+            in_keys=[f"flat_{key}" for key in tile_keys],
             out_key='flat_obs'
         ))
         env.append_transform(CenterPlayerTransform(
