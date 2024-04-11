@@ -784,8 +784,8 @@ if __name__ == '__main__':
     parser.add_argument('--log_eval_video', action='store_true', help='enable video logging during eval')
     parser.add_argument('--wandb', action='store_true', help='command switch to enable wandb logging')
     parser.add_argument('--warmup_steps', type=int, default=16, help='delay before starting to learn')
-    parser.add_argument('--load_checkpoint')
-    parser.add_argument('--enjoy_checkpoint')
+    parser.add_argument('--load_checkpoint', help='load the checkpoint')
+    parser.add_argument('--enjoy_checkpoint', help='write a video of the policy in action')
 
     args = parser.parse_args()
 
