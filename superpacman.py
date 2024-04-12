@@ -281,10 +281,10 @@ def gen_params(batch_size=None):
     :return: a batch_size tensordict, with the following entries
 
        "player_pos": N, 2 tensor indices that correspond to the players location
-       "player_tiles": N, 5, 5 tensor, with a single tile set to 1 that indicates player position
-       "wall_tiles": N, 5, 5 tensor, 1 indicates wall
-       "reward_tiles": N, 5, 5 tensor, rewards remaining in environment
-       "energizer_tiles": N, 5, 5 tensor, episode will terminate when tile with value True is entered
+       "player_tiles": N, 21, 21 tensor, with a single tile set to 1 that indicates player position
+       "wall_tiles": N, 21, 21 tensor, 1 indicates wall
+       "reward_tiles": N, 21, 21 tensor, rewards remaining in environment
+       "energizer_tiles": N, 21, 21 tensor, episode will terminate when tile with value True is entered
 
     """
     walls = tensor([
@@ -780,9 +780,6 @@ if __name__ == '__main__':
     parser.add_argument('--ppo_steps', type=int, default=6, help="number of ppo updates per batch")
     parser.add_argument('--eval_freq', type=int, default=100, help="run eval after this many training steps")
     parser.add_argument('--eval_len', type=int, default=400, help="run eval after this many training steps")
-    parser.add_argument('--demo', action='store_true', help="command switch to visualize after training completes")
-    parser.add_argument('--log_train_video', action='store_true', help='enable video logging')
-    parser.add_argument('--log_eval_video', action='store_true', help='enable video logging during eval')
     parser.add_argument('--wandb', action='store_true', help='command switch to enable wandb logging')
     parser.add_argument('--warmup_steps', type=int, default=16, help='delay before starting to learn')
     parser.add_argument('--load_checkpoint', help='load the checkpoint')
@@ -818,32 +815,7 @@ if __name__ == '__main__':
     frames_per_batch = args.env_batch_size * args.steps_per_batch
     total_frames = args.env_batch_size * args.steps_per_batch * args.train_steps
 
-    # def make_env(log_video, env_batch_size):
-    #     env = SuperPacman(batch_size=torch.Size([env_batch_size]), device=args.device)
-    #     env = TransformedEnv(
-    #         env
-    #     )
-    #     env.append_transform(FlatTileTransform(tile_keys))
-    #     env.append_transform(CenterPlayerTransform(
-    #         patch_radius=4
-    #     ))
-    #     env.append_transform(StackTileTransform([f'c_{key}' for key in tile_keys]))
-    #     env.append_transform(StepCounter())
-    #     env.append_transform(RewardSum(reset_keys=['_reset']))
-    #
-    #     recorder = None
-    #     if log_video:
-    #         env.append_transform(RGBFullObsTransform())
-    #         env.append_transform(ToTensorImage(from_int=False))
-    #         env.append_transform(Resize(21*8, 21*8, in_keys=['pixels'], out_keys=['pixels'], interpolation='nearest'))
-    #         env.append_transform(PermuteTransform([-2, -1, -3], in_keys=['pixels'], out_keys=['pixels']))
-    #         logger = CSVLogger(exp_name=exp_name, log_dir="logs", video_fps=3, video_format='mp4')
-    #         recorder = VideoRecorder(logger=logger, tag='pacman', fps=3, skip=1)
-    #         env.append_transform(recorder)
-    #     check_env_specs(env)
-    #     env.set_seed(args.seed)
-    #     return env, recorder
-
+    # environments
     env = make_env(args.env_batch_size, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4,
                    seed=args.seed)
     check_env_specs(env)
@@ -1002,6 +974,7 @@ if __name__ == '__main__':
         with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
             eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4,
                                 seed=args.seed, log_video=True)
+            print("")
             print(f"rollout {suffix}")
             load_checkpoint(chkpt)
             eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
@@ -1096,7 +1069,6 @@ if __name__ == '__main__':
                 pbar.set_description(f'saving checkpoint {eval_reward_mean:.2f}')
                 save_checkpoint(f'models/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
 
-
     # once training is done, write a video of the best policy we found
     def best_checkpt(directory):
         best_rew = -inf
@@ -1115,61 +1087,4 @@ if __name__ == '__main__':
 
     best_chkpt, best_reward = best_checkpt(f'models/{exp_name}')
     if best_chkpt is not None:
-        enjoy_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}', msg='rolling out best policy found')
-
-    # if args.demo:
-    #   from matplotlib import pyplot as plt
-    #   import matplotlib.animation as animation
-    #   from torchvision.utils import make_grid
-    #     with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
-    #         eval_rollout = env.rollout(args.eval_len, policy_module, break_when_any_done=False)
-    #         recorder.dump()
-    #
-    #         """
-    #         The data dict layout is transitions
-    #
-    #         {(S, A), next: {R_next, S_next, A_next}}
-    #
-    #         [
-    #           { state_t0, reward_t0, terminal_t0, action_t0 next: { state_t2, reward_t2:1.0, terminal_t2:False } },
-    #           { state_t1, reward_t1, terminal_t1, action_t1 next: { state_t3, reward_t2:-1.0, terminal_t3:True } }
-    #           { state_t0, reward_t0, terminal_t0, action_t0 next: { state_t3, reward_t2:1.0, terminal_t3:False } }
-    #         ]
-    #
-    #         But which R to use, R or next: R?
-    #
-    #         recall: Q(S, A) = R + Q(S_next, A_next)
-    #
-    #         Observe that reward_t0 is always zero, reward is a consequence for taking an action in a state, therefore...
-    #
-    #         reward = data['next']['reward'][timestep]
-    #
-    #         Which terminal to use?
-    #
-    #         Recall that the value of a state is the expectation of future reward.
-    #         Thus the terminal state has no value, therefore...
-    #
-    #         Q(S, A) = R_next + Q(S_next, A_next) * terminal_next
-    #
-    #         terminal =  data['next']['terminal'][timestep]
-    #         """
-    #
-    #         eval_rollout = eval_rollout.cpu()
-    #         observation = eval_rollout['pixels']
-    #
-    #         fig, ax = plt.subplots(1)
-    #         img_plt = ax.imshow(make_grid(observation[:, 0].permute(0, 3, 1, 2)).permute(1, 2, 0))
-    #
-    #
-    #         def animate(i):
-    #             x = make_grid(observation[:, i].permute(0, 3, 1, 2)).permute(1, 2, 0)
-    #             img_plt.set_data(x)
-    #
-    #
-    #         myAnimation = animation.FuncAnimation(fig, animate, frames=90, interval=500, blit=False, repeat=False)
-    #
-    #         # uncomment if you want to save the output to mp4
-    #         # you will need ffmpeg in your path, or in the directory where you run the script
-    #         FFwriter = animation.FFMpegWriter(fps=2)
-    #         myAnimation.save('animation.mp4', writer=FFwriter)
-    #         plt.close(fig)
+        enjoy_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}')

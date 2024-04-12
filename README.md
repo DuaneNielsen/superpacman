@@ -18,7 +18,7 @@ Action space: (0, 1, 2, 3) -> N, E, S, W
   * it's stateless!  Supports Monte-carlo tree search
   * its vectorized by default, run batch sizes of 2048, 4096.. whatever your GPU can handle
   * outputs trajectories of pytorch tensors, ready to use
-  * outputs highly detailed 11 layer channel (walls, food, energizers, 4 ghosts, players, etc)
+  * outputs highly detailed 11 channel image (walls, food, energizers, 4 ghosts, players, etc)
   * ghost AI is implemented as per original game
   * can output absolute, egocentric, and partial egocentric observations
   * can output pixel observations (also absolute or partial egocentric)
@@ -64,28 +64,28 @@ pip install wandb
 
 basic demo, using pretrained agent
 ```commandline
-python superpacman.py --demo
+python superpacman.py --enjoy_checkpoint demo_chkpt.pt
 ```
 after running, check the logs/superpacman/videos directory
 
 manual mode - play the environment yourself
 ```commandline
-python manual.py
+python play.py
 ```
 
 manual mode - play the environment with partial observation
 ```commandline
-python manual.py --partial_size 4
+python play.py --partial_size 4
 ```
 
 help with parameters
 ```commandline
-python gridworld --help
+python superpacman.py --help
 ```
 
 log data to wandb
 ```commandline
-python gridworld.py --demo --wandb
+python superpacman.py --demo --wandb
 ```
 
 ### Parameter sweeps
