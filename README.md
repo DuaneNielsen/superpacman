@@ -64,7 +64,7 @@ pip install wandb
 
 basic demo, using pretrained agent
 ```commandline
-python superpacman.py --enjoy_checkpoint demo_chkpt.pt
+python superpacman.py --enjoy_checkpoint demo_checkpoint.pt
 ```
 after running, check the logs/superpacman/videos directory
 

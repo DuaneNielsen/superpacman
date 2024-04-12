@@ -978,12 +978,12 @@ if __name__ == '__main__':
             print(f"rollout {suffix}")
             load_checkpoint(chkpt)
             eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
-            print("writing video")
+            print(f"logging video")
             eval_env.recorder.dump(suffix=suffix)
 
     if args.enjoy_checkpoint:
         filename = Path(args.enjoy_checkpoint).name
-        enjoy_checkpoint(args.enjoy_checkpoint, suffix=f'_{filename}')
+        enjoy_checkpoint(args.enjoy_checkpoint, suffix=f'{filename}')
         exit()
 
     if args.load_checkpoint:
