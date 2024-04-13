@@ -245,9 +245,9 @@ def train(args):
         if i % 10 == 0:
             epi_stats = retrieve_episode_stats(tensordict_data, loss_vals, 'train')
             train_stats = {
-                "learning rate": scheduler.get_last_lr()[0],
-                "env_time": env_time,
-                "update_time": update_time,
+                "train_learning rate": scheduler.get_last_lr()[0],
+                "train_env_time": env_time,
+                "train_update_time": update_time,
             }
             stats = {**epi_stats, **train_stats}
             for name, value in stats.items():
