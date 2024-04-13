@@ -1,4 +1,5 @@
-from . import play, train_ppo
+from . import play
+from . import train_ppo
 from argparse import ArgumentParser
 
 
@@ -11,6 +12,7 @@ def main():
     play_parser.set_defaults(func=play.play)
 
     train_ppo_parser = subparsers.add_parser('train', help='Train the agent')
+    train_ppo_parser.add_argument('--exp_name', default='superpacman', help="experiment name")
     train_ppo_parser.add_argument('--device', default='cpu', help="cuda or cpu")
     train_ppo_parser.add_argument('--seed', type=int, default=42, help="seed (defaults 42)")
     train_ppo_parser.add_argument('--env_batch_size', type=int, default=2048, help="number of environments")
@@ -37,6 +39,14 @@ def main():
     # enjoy_parser = subparsers.add_parser('enjoy', help='Write a video of the policy in action')
     # enjoy_parser.add_argument('enjoy_checkpoint', type=str, help='checkpoint')
     # enjoy_parser.set_defaults(func=train_ppo.train)
-
     args = parser.parse_args()
-    args.func(args)
+
+    if hasattr(args, 'func'):
+        args.func(args)
+    else:
+        # If no subcommand is provided, print the help message
+        parser.print_help()
+
+
+if __name__ == '__main__':
+    main()
