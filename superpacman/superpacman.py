@@ -707,6 +707,14 @@ class StackTileTransform(ObservationTransform):
         )
 
 
+def has_transform(env, transform_class):
+    if isinstance(env, TransformedEnv):
+        for transform in env.transform.transforms:
+            if isinstance(transform, transform_class):
+                return True
+    return False
+
+
 def make_env(env_batch_size, device='cpu', flat_obs=False, abs_image=False, ego_image=False,
              ego_patch_radius=10, log_video=False, abs_pixel=False, ego_pixel=False, log_stats=True, seed=None,
              logger=None):
@@ -730,12 +738,12 @@ def make_env(env_batch_size, device='cpu', flat_obs=False, abs_image=False, ego_
         env.append_transform(RGBFullObsTransform())
 
     if ego_pixel:
-        if not ego_image:
+        if not has_transform(env, CenterPlayerTransform):
             env.append_transform(CenterPlayerTransform(patch_radius=ego_patch_radius))
         env.append_transform(RGBPartialObsTransform())
 
     if log_video:
-        if not abs_pixel:
+        if not has_transform(env, RGBFullObsTransform):
             env.append_transform(RGBFullObsTransform())
         env.append_transform(ToTensorImage(from_int=False))
         env.append_transform(Resize(21 * 8, 21 * 8, in_keys=['pixels'], out_keys=['pixels'], interpolation='nearest'))
@@ -744,7 +752,7 @@ def make_env(env_batch_size, device='cpu', flat_obs=False, abs_image=False, ego_
             logger = CSVLogger(exp_name='superpacman', log_dir="../logs", video_fps=3, video_format='mp4')
         recorder = VideoRecorder(logger=logger, tag='pacman', fps=3, skip=1)
         env.append_transform(recorder)
-        env.recorder = recorder
+        env.video_recorder = recorder
 
     if log_stats:
         env.append_transform(StepCounter())

@@ -22,13 +22,16 @@ def train(args):
     from time import time
     from warnings import warn
     from math import inf
+    from torchrl.record import CSVLogger
 
-    exp_name = 'superpacman'
+    exp_name = args.exp_name
     if args.wandb:
         import wandb
 
         wandb.init(project='superpacman', config=args)
-        exp_name = f'{wandb.run.name}-{wandb.run.id}'
+        exp_name = f'{args.exp_name}{wandb.run.name}-{wandb.run.id}'
+
+    logger = CSVLogger(exp_name=exp_name, log_dir='./logs')
 
     frames_per_batch = args.env_batch_size * args.steps_per_batch
     total_frames = args.env_batch_size * args.steps_per_batch * args.train_steps
@@ -186,17 +189,16 @@ def train(args):
         optim.load_state_dict(chkpt["optim_state_dict"])
         scheduler.load_state_dict(chkpt["scheduler_state_dict"])
 
-
-    def enjoy_checkpoint(chkpt, suffix):
+    def enjoy_checkpoint(chkpt, suffix, logger=None):
         with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
             eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4,
-                                seed=args.seed, log_video=True)
+                                seed=args.seed, log_video=True, logger=logger)
             print("")
             print(f"rollout {suffix}")
             load_checkpoint(chkpt)
             eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
             print(f"logging video")
-            eval_env.recorder.dump(suffix=suffix)
+            eval_env.video_recorder.dump(suffix=suffix)
 
 
     if args.enjoy_checkpoint:
@@ -253,15 +255,16 @@ def train(args):
                     f"{prefix}policy_entropy_value_min": entropy.min().item(),
                 }
 
-
-        if i % 10 == 0 and args.wandb:
+        if i % 10 == 0:
             epi_stats = retrieve_episode_stats(tensordict_data, loss_vals, 'train')
-            wandb.log(epi_stats, step=i)
-            wandb.log({
+            train_stats = {
                 "learning rate": scheduler.get_last_lr()[0],
                 "env_time": env_time,
                 "update_time": update_time,
-            }, step=i)
+            }
+            stats = {**epi_stats, **train_stats}
+            for name, value in stats.items():
+                logger.log_scalar(name, value, step=i)
 
             train_reward_mean = epi_stats['train_episode_reward_mean']
             train_reward_max = epi_stats['train_episode_reward_max']
@@ -279,14 +282,13 @@ def train(args):
                 advantage_module(eval_rollout)
                 loss = loss_module(eval_rollout)
                 epi_stats = retrieve_episode_stats(eval_rollout, loss, prefix='eval')
-                if args.wandb:
-                    wandb.log(epi_stats, step=i)
+                for name, value in epi_stats.items():
+                    logger.log_scalar(name, value, step=i)
 
                 eval_reward_mean = epi_stats['eval_episode_reward_mean']
 
                 pbar.set_description(f'saving checkpoint {eval_reward_mean:.2f}')
-                save_checkpoint(f'models/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
-
+                save_checkpoint(f'checkpoints/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
 
     # once training is done, write a video of the best policy we found
     def best_checkpt(directory):
@@ -304,7 +306,6 @@ def train(args):
 
         return best_chkpt, best_rew
 
-
-    best_chkpt, best_reward = best_checkpt(f'models/{exp_name}')
+    best_chkpt, best_reward = best_checkpt(f'checkpoints/{exp_name}')
     if best_chkpt is not None:
-        enjoy_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}')
+        enjoy_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}', logger=logger)
