@@ -1,6 +1,6 @@
 # superpacman
 
-A stateless, vectorized implementation of pacman, implemented in pytorchRL
+A stateless, vectorized implementation of pacman, implemented in torchRL
 
 
 
@@ -67,13 +67,24 @@ help with parameters
 superpacman --help
 ```
 
-### wandb integration
-log data to wandb
+### Training and Logging
+
+its possible to reproduce the PPO training baselines in your favourite ml tool
+
 ```commandline
-superpacman train --wandb
+superpacman train
 ```
 
-### Parameter sweeps
+default is csv, but wandb, mlflow and tensorboard are also supported
+
+### wandb integration
+log training data to wandb
+```commandline
+pip install wandb
+superpacman train --logger wandb
+```
+
+### wandb parameter sweeps
 
 run a parameter sweep using wandb
 ```commandline
@@ -91,4 +102,22 @@ wandb: Run sweep agent with: wandb agent duanenielsen/supergrid/t1qjy41y
 run generated agent command
 ```commandline
 wandb agent duanenielsen/supergrid/t1qjy41y
+```
+
+### mlflow integration
+
+```commandline
+pip install mlflow
+superpacman train --logger mlflow
+mlflow ui --backend-store-uri file://$PWD/mlflow
+```
+
+you may need to modify the file uri for your OS
+
+### tensorboard integration
+
+```commandline
+pip install tensorboard
+superpacman train --logger tensorboard
+tensorboard --logdir tensorboard
 ```

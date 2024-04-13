@@ -22,7 +22,7 @@ setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.11',
-    install_requires=["torch", "torchrl", "torchvision", "matplotlib", "tqdm", "av"],
+    install_requires=["torch", "torchrl", "torchvision", "matplotlib", "tqdm", "av", "moviepy"],
     extras_require={
         "dev": ['twine', 'wheel'],
     },

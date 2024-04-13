@@ -30,7 +30,8 @@ def main():
     train_ppo_parser.add_argument('--ppo_steps', type=int, default=6, help="number of ppo updates per batch")
     train_ppo_parser.add_argument('--eval_freq', type=int, default=100, help="run eval after this many training steps")
     train_ppo_parser.add_argument('--eval_len', type=int, default=400, help="run eval after this many training steps")
-    train_ppo_parser.add_argument('--wandb', action='store_true', help='command switch to enable wandb logging')
+    train_ppo_parser.add_argument('--logger', choices=['csv', 'wandb', 'mlflow', 'tensorboard'], default='csv',
+                                  help='supported loggers')
     train_ppo_parser.add_argument('--warmup_steps', type=int, default=16, help='delay before starting to learn')
     train_ppo_parser.add_argument('--load_checkpoint', help='load the checkpoint')
     train_ppo_parser.add_argument('--enjoy_checkpoint', help='enjoy the checkpoint')

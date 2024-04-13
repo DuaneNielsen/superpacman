@@ -22,16 +22,10 @@ def train(args):
     from time import time
     from warnings import warn
     from math import inf
-    from torchrl.record import CSVLogger
+    from torchrl.record.loggers import get_logger, generate_exp_name
 
-    exp_name = args.exp_name
-    if args.wandb:
-        import wandb
-
-        wandb.init(project='superpacman', config=args)
-        exp_name = f'{args.exp_name}{wandb.run.name}-{wandb.run.id}'
-
-    logger = CSVLogger(exp_name=exp_name, log_dir='./logs')
+    exp_name = generate_exp_name(model_name='superpacman', experiment_name='ppo')
+    logger = get_logger(args.logger, args.logger, experiment_name=exp_name)
 
     frames_per_batch = args.env_batch_size * args.steps_per_batch
     total_frames = args.env_batch_size * args.steps_per_batch * args.train_steps
@@ -42,10 +36,11 @@ def train(args):
     check_env_specs(env)
     eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4, seed=args.seed)
 
+    # networks
+
     in_features = env.observation_spec['flat_obs'].shape[-1]
     in_channels = env.observation_spec['ego_image'].shape[-3]
     actions_n = env.action_spec.n
-
 
     class VGGConvBlock(nn.Module):
         def __init__(self, in_channels):
@@ -69,7 +64,6 @@ def train(args):
                 image = self.layers(image)
             return image
 
-
     class Value(nn.Module):
         """
         MLP value function
@@ -89,7 +83,6 @@ def train(args):
             features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
             values = self.net(features)
             return values
-
 
     value_net = Value(in_features=in_features, in_channels=in_channels, hidden_dim=args.hidden_dim)
 
@@ -161,16 +154,13 @@ def train(args):
 
     optim = Adam(loss_module.parameters(), lr=args.lr)
 
-
     def warmup(current_step: int):
         if current_step < args.warmup_steps:
             return 0.
         else:
             return 1.
 
-
     scheduler = LambdaLR(optim, lr_lambda=warmup)
-
 
     def save_checkpoint(filename):
         Path(filename).parent.mkdir(parents=True, exist_ok=True)
@@ -181,7 +171,6 @@ def train(args):
             "scheduler_state_dict": scheduler.state_dict()
         }, filename)
 
-
     def load_checkpoint(filename):
         chkpt = torch.load(filename)
         value_net.load_state_dict(chkpt["value_net_state_dict"])
@@ -189,17 +178,15 @@ def train(args):
         optim.load_state_dict(chkpt["optim_state_dict"])
         scheduler.load_state_dict(chkpt["scheduler_state_dict"])
 
-    def enjoy_checkpoint(chkpt, suffix, logger=None):
+    def enjoy_checkpoint(chkpt, suffix, logger):
         with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
             eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4,
                                 seed=args.seed, log_video=True, logger=logger)
-            print("")
-            print(f"rollout {suffix}")
+            print(f"rolling out policy {suffix}")
             load_checkpoint(chkpt)
             eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
-            print(f"logging video")
+            print(f"logging video to {logger.log_dir}/{logger.exp_name}")
             eval_env.video_recorder.dump(suffix=suffix)
-
 
     if args.enjoy_checkpoint:
         filename = Path(args.enjoy_checkpoint).name
@@ -289,6 +276,8 @@ def train(args):
 
                 pbar.set_description(f'saving checkpoint {eval_reward_mean:.2f}')
                 save_checkpoint(f'checkpoints/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
+
+    pbar.close()
 
     # once training is done, write a video of the best policy we found
     def best_checkpt(directory):
