@@ -38,39 +38,24 @@ As training progresses, ghosts are released, and rewards become more sparse, nat
 
 Tested under python 3.11 venv
 
-clone the directory using git
+If you intend to run on gpu, install the gpu version of pytorch
 
 ```commandline
-git clone https://github.com/duanenielsen/superpacman
+pip install superpacman 
 ```
 
-minimal requirements
-
-```commandline
-pip install torch
-pip install torchrl
-pip install torchvision
-pip install matplotlib
-pip install tqdm
-pip install av
-```
-
-optional requirements
-```commandline
-pip install wandb
-```
 
 ### Running
 
 basic demo, using pretrained agent
 ```commandline
-python superpacman.py --enjoy_checkpoint demo_checkpoint.pt
+superpacman train --enjoy_checkpoint demo_checkpoint.pt
 ```
 after running, check the logs/superpacman/videos directory
 
 manual mode - play the environment yourself
 ```commandline
-python play.py
+superpacman play
 ```
 
 manual mode - play the environment with partial observation
