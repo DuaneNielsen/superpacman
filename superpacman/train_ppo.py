@@ -95,7 +95,6 @@ def train(args):
         in_keys=['flat_obs', 'ego_image']
     ).to(args.device)
 
-
     class Policy(nn.Module):
         """
         Policy network for flat observation
@@ -114,7 +113,6 @@ def train(args):
             conv_values = self.convblock(image)
             features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
             return log_softmax(self.net(features), dim=-1)
-
 
     policy_net = Policy(in_features, in_channels, args.hidden_dim, actions_n)
 
