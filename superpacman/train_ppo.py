@@ -19,6 +19,7 @@ from math import inf
 from torchrl.record.loggers import get_logger, generate_exp_name
 from torchrl.record import CSVLogger
 from torch.nn.functional import selu
+from importlib.metadata import version
 
 
 class FireModule(nn.Module):
@@ -93,7 +94,7 @@ class Policy(nn.Module):
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
         )
-        self.convblock = SqueezeNet(in_channels)
+        self.convblock = SqueezeNet(in_channels, power)
 
     def forward(self, image):
         conv_values = self.convblock(image)
@@ -107,7 +108,8 @@ def train(args):
     the Generalized Advantage Estimation module is used to compute Advantage
     """
 
-    exp_name = generate_exp_name(model_name='superpacman', experiment_name='ppo')
+    v = version('superpacman')
+    exp_name = generate_exp_name(model_name=f'superpacman_{v}', experiment_name='ppo')
     if args.logger == 'csv':
         logger = CSVLogger(exp_name, args.logger, video_format='mp4', video_fps=3)
     else:
