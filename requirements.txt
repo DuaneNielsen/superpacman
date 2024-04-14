@@ -1,6 +1,0 @@
-av
-matplotlib
-torch
-torchrl==0.3.1
-torchvision
-tqdm
