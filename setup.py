@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="superpacman",
-    version="0.1.a5",
+    version="0.1.a6",
     author="Duane Nielsen",
     author_email="duanenielsen@example.com",
     description="The SuperPacman reinforcement learning environment",
