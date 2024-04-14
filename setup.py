@@ -29,7 +29,7 @@ setup(
     python_requires='>=3.8',
     install_requires=["torch", "torchrl", "torchvision", "matplotlib", "tqdm", "av", "moviepy"],
     extras_require={
-        "dev": ['twine', 'wheel'],
+        "dev": ['twine', 'wheel', 'setuptools'],
     },
     entry_points={
         'console_scripts':

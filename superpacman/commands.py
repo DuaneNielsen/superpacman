@@ -34,12 +34,15 @@ def main():
                                   help='supported loggers')
     train_ppo_parser.add_argument('--warmup_steps', type=int, default=16, help='delay before starting to learn')
     train_ppo_parser.add_argument('--load_checkpoint', help='load the checkpoint')
-    train_ppo_parser.add_argument('--enjoy_checkpoint', help='enjoy the checkpoint')
     train_ppo_parser.set_defaults(func=train_ppo.train)
 
-    # enjoy_parser = subparsers.add_parser('enjoy', help='Write a video of the policy in action')
-    # enjoy_parser.add_argument('enjoy_checkpoint', type=str, help='checkpoint')
-    # enjoy_parser.set_defaults(func=train_ppo.train)
+    enjoy_parser = subparsers.add_parser('enjoy', help='Write a video of the policy in action')
+    enjoy_parser.add_argument('checkpoint', type=str, help='checkpoint')
+    enjoy_parser.add_argument('--device', type=str, default='cpu')
+    enjoy_parser.add_argument('--seed', type=int, default=42)
+    enjoy_parser.add_argument('--length', type=int, default=400, help='rollout length')
+    enjoy_parser.set_defaults(func=train_ppo.enjoy_checkpoint)
+
     args = parser.parse_args()
 
     if hasattr(args, 'func'):

@@ -1,31 +1,100 @@
+from superpacman import make_env
+import tqdm
+import torch
+import torch.nn as nn
+from torch.optim import Adam
+from torch.optim.lr_scheduler import LambdaLR
+from tensordict.nn import TensorDictModule
+from torch.distributions import Categorical
+from torch.nn.functional import log_softmax
+from torchrl.modules import ProbabilisticActor, ValueOperator
+from torchrl.collectors import SyncDataCollector
+from torchrl.objectives import ClipPPOLoss
+from torchrl.objectives.value import GAE
+from torchrl.envs.utils import check_env_specs, ExplorationType, set_exploration_type
+from pathlib import Path
+from time import time
+from warnings import warn
+from math import inf
+from torchrl.record.loggers import get_logger, generate_exp_name
+from torchrl.record import CSVLogger
+
+
+class VGGConvBlock(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Conv2d(in_channels=in_channels, out_channels=128, stride=1, kernel_size=3, padding=1),
+            nn.SELU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1),
+            nn.SELU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+
+    def forward(self, image):
+        if len(image.shape) == 5:
+            N, L, C, H, W = image.shape
+            image = image.flatten(0, 1)
+            image = self.layers(image)
+            image = image.unflatten(0, (N, L))
+        else:
+            image = self.layers(image)
+        return image
+
+
+class Value(nn.Module):
+    """
+    MLP value function
+    """
+
+    def __init__(self, in_features, in_channels, hidden_dim):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
+            nn.ReLU(),
+            nn.Linear(in_features=hidden_dim, out_features=1, bias=False)
+        )
+        self.convblock = VGGConvBlock(in_channels)
+
+    def forward(self, flat_obs, image):
+        conv_values = self.convblock(image)
+        features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
+        values = self.net(features)
+        return values
+
+
+class Policy(nn.Module):
+    """
+    Policy network for flat observation
+    """
+
+    def __init__(self, in_features, in_channels, hidden_dim, actions_n):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
+            nn.ReLU(),
+            nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
+        )
+        self.convblock = VGGConvBlock(in_channels)
+
+    def forward(self, flat_obs, image):
+        conv_values = self.convblock(image)
+        features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
+        return log_softmax(self.net(features), dim=-1)
+
+
 def train(args):
     """
     Optimize the agent using Proximal Policy Optimization (Actor - Critic)
     the Generalized Advantage Estimation module is used to compute Advantage
     """
 
-    from superpacman import make_env
-    import tqdm
-    import torch
-    import torch.nn as nn
-    from torch.optim import Adam
-    from torch.optim.lr_scheduler import LambdaLR
-    from tensordict.nn import TensorDictModule
-    from torch.distributions import Categorical
-    from torch.nn.functional import log_softmax
-    from torchrl.modules import ProbabilisticActor, ValueOperator
-    from torchrl.collectors import SyncDataCollector
-    from torchrl.objectives import ClipPPOLoss
-    from torchrl.objectives.value import GAE
-    from torchrl.envs.utils import check_env_specs, ExplorationType, set_exploration_type
-    from pathlib import Path
-    from time import time
-    from warnings import warn
-    from math import inf
-    from torchrl.record.loggers import get_logger, generate_exp_name
-
     exp_name = generate_exp_name(model_name='superpacman', experiment_name='ppo')
-    logger = get_logger(args.logger, args.logger, experiment_name=exp_name)
+    if args.logger == 'csv':
+        logger = CSVLogger(exp_name, args.logger, video_format='mp4', video_fps=3)
+    else:
+        logger = get_logger(args.logger, args.logger, experiment_name=exp_name)
 
     frames_per_batch = args.env_batch_size * args.steps_per_batch
     total_frames = args.env_batch_size * args.steps_per_batch * args.train_steps
@@ -37,80 +106,17 @@ def train(args):
     eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4, seed=args.seed)
 
     # networks
-
     in_features = env.observation_spec['flat_obs'].shape[-1]
     in_channels = env.observation_spec['ego_image'].shape[-3]
     actions_n = env.action_spec.n
 
-    class VGGConvBlock(nn.Module):
-        def __init__(self, in_channels):
-            super().__init__()
-            self.layers = nn.Sequential(
-                nn.Conv2d(in_channels=in_channels, out_channels=128, stride=1, kernel_size=3, padding=1),
-                nn.SELU(inplace=True),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1),
-                nn.SELU(inplace=True),
-                nn.MaxPool2d(kernel_size=2, stride=2)
-            )
-
-        def forward(self, image):
-            if len(image.shape) == 5:
-                N, L, C, H, W = image.shape
-                image = image.flatten(0, 1)
-                image = self.layers(image)
-                image = image.unflatten(0, (N, L))
-            else:
-                image = self.layers(image)
-            return image
-
-    class Value(nn.Module):
-        """
-        MLP value function
-        """
-
-        def __init__(self, in_features, in_channels, hidden_dim):
-            super().__init__()
-            self.net = nn.Sequential(
-                nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
-                nn.ReLU(),
-                nn.Linear(in_features=hidden_dim, out_features=1, bias=False)
-            )
-            self.convblock = VGGConvBlock(in_channels)
-
-        def forward(self, flat_obs, image):
-            conv_values = self.convblock(image)
-            features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
-            values = self.net(features)
-            return values
-
     value_net = Value(in_features=in_features, in_channels=in_channels, hidden_dim=args.hidden_dim)
+    policy_net = Policy(in_features, in_channels, args.hidden_dim, actions_n)
 
     value_module = ValueOperator(
         module=value_net,
         in_keys=['flat_obs', 'ego_image']
     ).to(args.device)
-
-    class Policy(nn.Module):
-        """
-        Policy network for flat observation
-        """
-
-        def __init__(self, in_features, in_channels, hidden_dim, actions_n):
-            super().__init__()
-            self.net = nn.Sequential(
-                nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
-                nn.ReLU(),
-                nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
-            )
-            self.convblock = VGGConvBlock(in_channels)
-
-        def forward(self, flat_obs, image):
-            conv_values = self.convblock(image)
-            features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
-            return log_softmax(self.net(features), dim=-1)
-
-    policy_net = Policy(in_features, in_channels, args.hidden_dim, actions_n)
 
     policy_module = TensorDictModule(
         policy_net,
@@ -168,7 +174,8 @@ def train(args):
             "value_net_state_dict": value_net.state_dict(),
             "policy_net_state_dict": policy_net.state_dict(),
             "optim_state_dict": optim.state_dict(),
-            "scheduler_state_dict": scheduler.state_dict()
+            "scheduler_state_dict": scheduler.state_dict(),
+            "hidden_dim": args.hidden_dim
         }, filename)
 
     def load_checkpoint(filename):
@@ -177,21 +184,6 @@ def train(args):
         policy_net.load_state_dict(chkpt["policy_net_state_dict"])
         optim.load_state_dict(chkpt["optim_state_dict"])
         scheduler.load_state_dict(chkpt["scheduler_state_dict"])
-
-    def enjoy_checkpoint(chkpt, suffix, logger):
-        with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
-            eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4,
-                                seed=args.seed, log_video=True, logger=logger)
-            print(f"rolling out policy {suffix}")
-            load_checkpoint(chkpt)
-            eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
-            print(f"logging video to {logger.log_dir}/{logger.exp_name}")
-            eval_env.video_recorder.dump(suffix=suffix)
-
-    if args.enjoy_checkpoint:
-        filename = Path(args.enjoy_checkpoint).name
-        enjoy_checkpoint(args.enjoy_checkpoint, suffix=f'{filename}')
-        exit()
 
     if args.load_checkpoint:
         load_checkpoint(args.load_checkpoint)
@@ -297,4 +289,44 @@ def train(args):
 
     best_chkpt, best_reward = best_checkpt(f'checkpoints/{exp_name}')
     if best_chkpt is not None:
-        enjoy_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}', logger=logger)
+        rollout_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}', logger=logger, device=args.device, seed=args.seed, len=args.eval_len)
+
+
+def load_policy_from_checkpoint(checkpoint_filename, in_features, in_channels, actions_n, device='cpu'):
+    chkpt = torch.load(checkpoint_filename)
+    hidden_dim = chkpt['hidden_dim']
+    policy_net = Policy(in_features, in_channels, hidden_dim, actions_n)
+    policy_module = TensorDictModule(
+        policy_net,
+        in_keys=['flat_obs', 'ego_image'],
+        out_keys=['logits'],
+    )
+    policy_module = ProbabilisticActor(
+        policy_module,
+        in_keys=['logits'],
+        out_keys=['action'],
+        distribution_class=Categorical,
+        return_log_prob=True
+    ).to(device)
+    policy_net.load_state_dict(chkpt["policy_net_state_dict"])
+    return policy_module
+
+
+def rollout_checkpoint(chkpt, suffix, logger, device='cpu', seed=42, len=400):
+    with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
+        eval_env = make_env(32, device=device, flat_obs=True, ego_image=True, ego_patch_radius=4,
+                            seed=seed, log_video=True, logger=logger)
+        print(f"rolling out policy {suffix}")
+        in_features = eval_env.observation_spec['flat_obs'].shape[-1]
+        in_channels = eval_env.observation_spec['ego_image'].shape[-3]
+        actions_n = eval_env.action_spec.n
+        policy_module = load_policy_from_checkpoint(chkpt, in_features, in_channels, actions_n, device=device)
+        eval_env.rollout(len, policy_module, break_when_any_done=False)
+        print(f"logging video to {logger.log_dir}/{logger.exp_name}")
+        eval_env.video_recorder.dump(suffix=suffix)
+
+
+def enjoy_checkpoint(args):
+    filename = Path(args.checkpoint).name
+    logger = CSVLogger(filename, './enjoy', video_format='mp4', video_fps=3)
+    rollout_checkpoint(args.checkpoint, suffix=filename, device=args.device, logger=logger, seed=args.seed, len=args.length)
