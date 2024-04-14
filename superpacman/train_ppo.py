@@ -18,18 +18,35 @@ from warnings import warn
 from math import inf
 from torchrl.record.loggers import get_logger, generate_exp_name
 from torchrl.record import CSVLogger
+from torch.nn.functional import selu
 
 
-class VGGConvBlock(nn.Module):
-    def __init__(self, in_channels):
+class FireModule(nn.Module):
+    def __init__(self, in_channels, expand_channels, out_channels):
+        super().__init__()
+        self.fire1 = nn.Conv2d(in_channels, expand_channels, kernel_size=1, stride=1)
+        self.expand = nn.Conv2d(expand_channels, expand_channels, stride=1, kernel_size=3, padding=1)
+        self.fire2 = nn.Conv2d(expand_channels, out_channels, kernel_size=1, stride=1)
+
+    def forward(self, activations):
+        activations = selu(self.fire1(activations))
+        residual = selu(self.expand(activations))
+        activations = activations + residual
+        activations = selu(self.fire2(activations))
+        return activations
+
+
+class SqueezeNet(nn.Module):
+    def __init__(self, in_channels, power=5):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Conv2d(in_channels=in_channels, out_channels=128, stride=1, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=in_channels, out_channels=2 ** power, stride=1, kernel_size=3, padding=1),
             nn.SELU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1),
-            nn.SELU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2)
+            FireModule(2 ** power, 2 * 2 ** power, 2 ** power),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            FireModule(2 ** power, 2 * 2 ** power, 2 ** power),
+            nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
     def forward(self, image):
@@ -48,18 +65,18 @@ class Value(nn.Module):
     MLP value function
     """
 
-    def __init__(self, in_features, in_channels, hidden_dim):
+    def __init__(self, in_channels, power, hidden_dim):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
+            nn.Linear(in_features=4 * 2 ** power, out_features=hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=1, bias=False)
         )
-        self.convblock = VGGConvBlock(in_channels)
+        self.convblock = SqueezeNet(in_channels, power)
 
-    def forward(self, flat_obs, image):
+    def forward(self, image):
         conv_values = self.convblock(image)
-        features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
+        features = conv_values.flatten(-3)
         values = self.net(features)
         return values
 
@@ -69,18 +86,18 @@ class Policy(nn.Module):
     Policy network for flat observation
     """
 
-    def __init__(self, in_features, in_channels, hidden_dim, actions_n):
+    def __init__(self, in_channels, power, hidden_dim, actions_n):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
+            nn.Linear(in_features=4 * 2 ** power, out_features=hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
         )
-        self.convblock = VGGConvBlock(in_channels)
+        self.convblock = SqueezeNet(in_channels)
 
-    def forward(self, flat_obs, image):
+    def forward(self, image):
         conv_values = self.convblock(image)
-        features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
+        features = conv_values.flatten(-3)
         return log_softmax(self.net(features), dim=-1)
 
 
@@ -100,27 +117,25 @@ def train(args):
     total_frames = args.env_batch_size * args.steps_per_batch * args.train_steps
 
     # environments
-    env = make_env(args.env_batch_size, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4,
-                   seed=args.seed)
+    env = make_env(args.env_batch_size, device=args.device, ego_image=True, ego_patch_radius=10, seed=args.seed)
     check_env_specs(env)
-    eval_env = make_env(32, device=args.device, flat_obs=True, ego_image=True, ego_patch_radius=4, seed=args.seed)
+    eval_env = make_env(32, device=args.device, ego_image=True, ego_patch_radius=10, seed=args.seed)
 
     # networks
-    in_features = env.observation_spec['flat_obs'].shape[-1]
     in_channels = env.observation_spec['ego_image'].shape[-3]
     actions_n = env.action_spec.n
 
-    value_net = Value(in_features=in_features, in_channels=in_channels, hidden_dim=args.hidden_dim)
-    policy_net = Policy(in_features, in_channels, args.hidden_dim, actions_n)
+    value_net = Value(in_channels=in_channels, power=args.power, hidden_dim=args.hidden_dim)
+    policy_net = Policy(in_channels=in_channels, power=args.power, hidden_dim=args.hidden_dim, actions_n=actions_n)
 
     value_module = ValueOperator(
         module=value_net,
-        in_keys=['flat_obs', 'ego_image']
+        in_keys=['ego_image']
     ).to(args.device)
 
     policy_module = TensorDictModule(
         policy_net,
-        in_keys=['flat_obs', 'ego_image'],
+        in_keys=['ego_image'],
         out_keys=['logits'],
     )
 
@@ -175,11 +190,15 @@ def train(args):
             "policy_net_state_dict": policy_net.state_dict(),
             "optim_state_dict": optim.state_dict(),
             "scheduler_state_dict": scheduler.state_dict(),
+            "power": args.power,
             "hidden_dim": args.hidden_dim
         }, filename)
 
     def load_checkpoint(filename):
         chkpt = torch.load(filename)
+        power, hidden_dim = chkpt["power"], chkpt["hidden_dim"]
+        assert chkpt["power"] == args.power, f"set --power flag to --power {power}"
+        assert chkpt["hidden_dim"] == args.hidden_dim, f"set --hidden_dim flag to --hidden_dim {hidden_dim}"
         value_net.load_state_dict(chkpt["value_net_state_dict"])
         policy_net.load_state_dict(chkpt["policy_net_state_dict"])
         optim.load_state_dict(chkpt["optim_state_dict"])
@@ -210,7 +229,6 @@ def train(args):
         scheduler.step()
         after_update = time()
         update_time = after_update - after_collect
-
 
         # and now for the logging
         def retrieve_episode_stats(tensordict_data, loss_value, prefix=None):
@@ -289,16 +307,17 @@ def train(args):
 
     best_chkpt, best_reward = best_checkpt(f'checkpoints/{exp_name}')
     if best_chkpt is not None:
-        rollout_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}', logger=logger, device=args.device, seed=args.seed, len=args.eval_len)
+        rollout_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}', logger=logger, device=args.device,
+                           seed=args.seed, len=args.eval_len)
 
 
-def load_policy_from_checkpoint(checkpoint_filename, in_features, in_channels, actions_n, device='cpu'):
+def load_policy_from_checkpoint(checkpoint_filename, in_channels, actions_n, device='cpu'):
     chkpt = torch.load(checkpoint_filename)
-    hidden_dim = chkpt['hidden_dim']
-    policy_net = Policy(in_features, in_channels, hidden_dim, actions_n)
+    power, hidden_dim = chkpt["power"], chkpt["hidden_dim"]
+    policy_net = Policy(in_channels=in_channels, power=power, hidden_dim=hidden_dim, actions_n=actions_n)
     policy_module = TensorDictModule(
         policy_net,
-        in_keys=['flat_obs', 'ego_image'],
+        in_keys=['ego_image'],
         out_keys=['logits'],
     )
     policy_module = ProbabilisticActor(
@@ -314,13 +333,12 @@ def load_policy_from_checkpoint(checkpoint_filename, in_features, in_channels, a
 
 def rollout_checkpoint(chkpt, suffix, logger, device='cpu', seed=42, len=400):
     with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
-        eval_env = make_env(32, device=device, flat_obs=True, ego_image=True, ego_patch_radius=4,
+        eval_env = make_env(32, device=device, ego_image=True, ego_patch_radius=10,
                             seed=seed, log_video=True, logger=logger)
         print(f"rolling out policy {suffix}")
-        in_features = eval_env.observation_spec['flat_obs'].shape[-1]
         in_channels = eval_env.observation_spec['ego_image'].shape[-3]
         actions_n = eval_env.action_spec.n
-        policy_module = load_policy_from_checkpoint(chkpt, in_features, in_channels, actions_n, device=device)
+        policy_module = load_policy_from_checkpoint(chkpt, in_channels, actions_n, device=device)
         eval_env.rollout(len, policy_module, break_when_any_done=False)
         print(f"logging video to {logger.log_dir}/{logger.exp_name}")
         eval_env.video_recorder.dump(suffix=suffix)
@@ -329,4 +347,5 @@ def rollout_checkpoint(chkpt, suffix, logger, device='cpu', seed=42, len=400):
 def enjoy_checkpoint(args):
     filename = Path(args.checkpoint).name
     logger = CSVLogger(filename, './enjoy', video_format='mp4', video_fps=3)
-    rollout_checkpoint(args.checkpoint, suffix=filename, device=args.device, logger=logger, seed=args.seed, len=args.length)
+    rollout_checkpoint(args.checkpoint, suffix=filename, device=args.device, logger=logger, seed=args.seed,
+                       len=args.length)
