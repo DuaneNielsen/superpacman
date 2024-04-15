@@ -715,8 +715,8 @@ def has_transform(env, transform_class):
     return False
 
 
-def make_env(env_batch_size, device='cpu', flat_obs=False, abs_image=False, ego_image=False,
-             ego_patch_radius=10, log_video=False, abs_pixel=False, ego_pixel=False, log_stats=True, seed=None,
+def make_env(env_batch_size, obs_keys=None, device='cpu',
+             ego_patch_radius=10, log_video=False,  log_stats=True, seed=None,
              logger=None):
 
     assert env_batch_size > 1, "sorry, batch size 1 is not supported yet, try batch size 2"
@@ -724,20 +724,24 @@ def make_env(env_batch_size, device='cpu', flat_obs=False, abs_image=False, ego_
     env = SuperPacman(batch_size=torch.Size([env_batch_size]), device=device)
     env = TransformedEnv(env)
 
-    if flat_obs:
+    obs_keys = ["image", "pixels"] if obs_keys is None else obs_keys
+    obs_keys = [obs_keys] if isinstance(obs_keys, str) else obs_keys
+    obs_keys = set(obs_keys)
+
+    if "flat_obs" in obs_keys:
         env.append_transform(FlatTileTransform(tile_keys))
 
-    if abs_image:
+    if "image" in obs_keys:
         env.append_transform(StackTileTransform(in_keys=tile_keys))
 
-    if ego_image:
+    if "ego_image" in obs_keys:
         env.append_transform(CenterPlayerTransform(patch_radius=ego_patch_radius))
         env.append_transform(StackTileTransform(in_keys=egocentric_tile_keys, out_key='ego_image'))
 
-    if abs_pixel:
+    if "pixels" in obs_keys:
         env.append_transform(RGBFullObsTransform())
 
-    if ego_pixel:
+    if "ego_pixel" in obs_keys:
         if not has_transform(env, CenterPlayerTransform):
             env.append_transform(CenterPlayerTransform(patch_radius=ego_patch_radius))
         env.append_transform(RGBPartialObsTransform())

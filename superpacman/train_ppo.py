@@ -145,9 +145,9 @@ def train(args):
     total_frames = args.env_batch_size * args.steps_per_batch * args.train_steps
 
     # environments
-    env = make_env(args.env_batch_size, device=args.device, abs_image=True, ego_patch_radius=10, seed=args.seed)
+    env = make_env(args.env_batch_size, "image", device=args.device, ego_patch_radius=10, seed=args.seed)
     check_env_specs(env)
-    eval_env = make_env(32, device=args.device, abs_image=True, ego_patch_radius=10, seed=args.seed)
+    eval_env = make_env(32, "image", device=args.device, ego_patch_radius=10, seed=args.seed)
 
     # networks
     in_channels = env.observation_spec['image'].shape[-3]
@@ -368,7 +368,7 @@ def load_policy_from_checkpoint(checkpoint_filename, in_channels, actions_n, dev
 
 def rollout_checkpoint(chkpt, suffix, logger, device='cpu', seed=42, len=400):
     with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
-        eval_env = make_env(32, device=device, abs_image=True, ego_patch_radius=10,
+        eval_env = make_env(32, "image", device=device, ego_patch_radius=10,
                             seed=seed, log_video=True, logger=logger)
         print(f"rolling out policy {suffix}")
         in_channels = eval_env.observation_spec['image'].shape[-3]

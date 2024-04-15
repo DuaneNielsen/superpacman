@@ -1,6 +1,6 @@
 command:
   - ${env}
-  - ..\supergrid\venv\Scripts\python.exe
+  - C:\Users\Cabron\PycharmProjects\supergrid\venv\Scripts\python.exe
   - -m
   - ${program}
   - train
@@ -37,7 +37,7 @@ parameters:
   max_grad_norm:
     values: [1.0]
   hidden_dim:
-    values: [64]
+    values: [64, 32, 16]
   lr:
     values: [1e-4]
   seed:
