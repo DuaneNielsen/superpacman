@@ -131,12 +131,11 @@ def train(args):
 
     hparams = vars(args)
     try:
-        v = version('superpacman')
-        hparams['version'] = v
+        hparams['version'] = version('superpacman')
     except PackageNotFoundError:
         pass
 
-    exp_name = generate_exp_name(model_name=f'superpacman_{v}', experiment_name='ppo')
+    exp_name = generate_exp_name(model_name=f'superpacman', experiment_name='ppo')
     if args.logger == 'csv':
         logger = CSVLogger(exp_name, args.logger, video_format='mp4', video_fps=3)
     else:
