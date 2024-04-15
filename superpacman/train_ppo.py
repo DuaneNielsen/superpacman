@@ -139,6 +139,9 @@ def train(args):
     frames_per_batch = args.env_batch_size * args.steps_per_batch
     total_frames = args.env_batch_size * args.steps_per_batch * args.train_steps
 
+    hparams = vars(args)
+    hparams['version'] = version
+
     # environments
     env = make_env(args.env_batch_size, device=args.device, ego_image=True, ego_patch_radius=10, seed=args.seed)
     check_env_specs(env)
@@ -150,6 +153,13 @@ def train(args):
 
     value_net = Value(in_channels=in_channels, power=args.power, hidden_dim=args.hidden_dim)
     policy_net = Policy(in_channels=in_channels, power=args.power, hidden_dim=args.hidden_dim, actions_n=actions_n)
+
+    value_params =sum(p.numel() for p in value_net.parameters() if p.requires_grad)
+    policy_params = sum(p.numel() for p in value_net.parameters() if p.requires_grad)
+    hparams['value_params'] = value_params
+    hparams['policy_params'] = policy_params
+    print(f'value params: {value_params} policy_params {policy_params}')
+    logger.log_hparams(hparams)
 
     value_module = ValueOperator(
         module=value_net,
