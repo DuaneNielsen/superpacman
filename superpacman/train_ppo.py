@@ -123,6 +123,25 @@ class Policy(nn.Module):
         return log_softmax(self.net(features), dim=-1)
 
 
+def make_policy_module(policy_net, in_keys, device):
+    in_keys = [in_keys] if isinstance(in_keys, str) else in_keys
+    policy_module = TensorDictModule(
+        policy_net,
+        in_keys=in_keys,
+        out_keys=['logits'],
+    )
+
+    policy_module = ProbabilisticActor(
+        policy_module,
+        in_keys=['logits'],
+        out_keys=['action'],
+        distribution_class=Categorical,
+        return_log_prob=True
+    ).to(device)
+
+    return policy_module
+
+
 def train(args):
     """
     Optimize the agent using Proximal Policy Optimization (Actor - Critic)
@@ -168,19 +187,7 @@ def train(args):
         in_keys=['image']
     ).to(args.device)
 
-    policy_module = TensorDictModule(
-        policy_net,
-        in_keys=['image'],
-        out_keys=['logits'],
-    )
-
-    policy_module = ProbabilisticActor(
-        policy_module,
-        in_keys=['logits'],
-        out_keys=['action'],
-        distribution_class=Categorical,
-        return_log_prob=True
-    ).to(args.device)
+    policy_module = make_policy_module(policy_net, 'image', args.device)
 
     # no need to reuse data for PPO as it's an online algo
     # so we will go with datacollector only and collect fresh batches each time
@@ -350,19 +357,8 @@ def load_policy_from_checkpoint(checkpoint_filename, in_channels, actions_n, dev
     chkpt = torch.load(checkpoint_filename)
     power, hidden_dim = chkpt["power"], chkpt["hidden_dim"]
     policy_net = Policy(in_channels=in_channels, power=power, hidden_dim=hidden_dim, actions_n=actions_n)
-    policy_module = TensorDictModule(
-        policy_net,
-        in_keys=['image'],
-        out_keys=['logits'],
-    )
-    policy_module = ProbabilisticActor(
-        policy_module,
-        in_keys=['logits'],
-        out_keys=['action'],
-        distribution_class=Categorical,
-        return_log_prob=True
-    ).to(device)
     policy_net.load_state_dict(chkpt["policy_net_state_dict"])
+    policy_module = make_policy_module(policy_net, 'image', device)
     return policy_module
 
 
