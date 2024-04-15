@@ -19,7 +19,7 @@ from math import inf
 from torchrl.record.loggers import get_logger, generate_exp_name
 from torchrl.record import CSVLogger
 from torch.nn.functional import selu
-from importlib.metadata import version
+from importlib.metadata import version, PackageNotFoundError
 
 
 class FireModule(nn.Module):
@@ -129,7 +129,13 @@ def train(args):
     the Generalized Advantage Estimation module is used to compute Advantage
     """
 
-    v = version('superpacman')
+    hparams = vars(args)
+    try:
+        v = version('superpacman')
+        hparams['version'] = v
+    except PackageNotFoundError:
+        pass
+
     exp_name = generate_exp_name(model_name=f'superpacman_{v}', experiment_name='ppo')
     if args.logger == 'csv':
         logger = CSVLogger(exp_name, args.logger, video_format='mp4', video_fps=3)
@@ -138,9 +144,6 @@ def train(args):
 
     frames_per_batch = args.env_batch_size * args.steps_per_batch
     total_frames = args.env_batch_size * args.steps_per_batch * args.train_steps
-
-    hparams = vars(args)
-    hparams['version'] = version
 
     # environments
     env = make_env(args.env_batch_size, device=args.device, abs_image=True, ego_patch_radius=10, seed=args.seed)
