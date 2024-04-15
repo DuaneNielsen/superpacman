@@ -61,6 +61,27 @@ class SqueezeNet(nn.Module):
         return image
 
 
+class VGGConvBlock(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Conv2d(in_channels=in_channels, out_channels=256, stride=7, kernel_size=7),
+            nn.GELU(),
+            nn.Conv2d(in_channels=256, out_channels=1024, stride=1, kernel_size=3),
+            nn.GELU(),
+        )
+
+    def forward(self, image):
+        if len(image.shape) == 5:
+            N, L, C, H, W = image.shape
+            image = image.flatten(0, 1)
+            image = self.layers(image)
+            image = image.unflatten(0, (N, L))
+        else:
+            image = self.layers(image)
+        return image
+
+
 class Value(nn.Module):
     """
     MLP value function
@@ -69,11 +90,11 @@ class Value(nn.Module):
     def __init__(self, in_channels, power, hidden_dim):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(in_features=4 * 2 ** power, out_features=hidden_dim),
+            nn.Linear(in_features=1024, out_features=hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=1, bias=False)
         )
-        self.convblock = SqueezeNet(in_channels, power)
+        self.convblock = VGGConvBlock(in_channels)
 
     def forward(self, image):
         conv_values = self.convblock(image)
@@ -90,11 +111,11 @@ class Policy(nn.Module):
     def __init__(self, in_channels, power, hidden_dim, actions_n):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(in_features=4 * 2 ** power, out_features=hidden_dim),
+            nn.Linear(in_features=1024, out_features=hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
         )
-        self.convblock = SqueezeNet(in_channels, power)
+        self.convblock = VGGConvBlock(in_channels)
 
     def forward(self, image):
         conv_values = self.convblock(image)

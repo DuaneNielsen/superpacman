@@ -1,36 +1,39 @@
 command:
   - ${env}
-  - ..\PycharmProjects\supergrid\venv\Scripts\python.exe
+  - ..\supergrid\venv\Scripts\python.exe
+  - -m
   - ${program}
-  - --wandb
+  - train
+  - --logger
+  - wandb
   - --device
   - cuda
   - --eval_freq
-  - 100
-  - --eval_len
   - 400
+  - --eval_len
+  - 1600
+  - --train_steps
+  - 5000
   - ${args}
 
-program: superpacman train
+program: superpacman.commands
 method: grid
 metric:
   name: eval_episode_reward_mean
   goal: maximize
 parameters:
   env_batch_size:
-    values: [2048]
+    values: [128, 256, 512, 1024]
   steps_per_batch:
     values: [16]
-  train_steps:
-    values: [1200]
   clip_epsilon:
-    values: [0.1, 0.2]
+    values: [0.1]
   gamma:
     values: [0.99]
   lmbda:
     values: [0.99]
   entropy_eps:
-    values: [0.001, 0.002]
+    values: [0.001]
   max_grad_norm:
     values: [1.0]
   hidden_dim:
