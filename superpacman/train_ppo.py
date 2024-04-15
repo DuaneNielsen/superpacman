@@ -143,12 +143,12 @@ def train(args):
     hparams['version'] = version
 
     # environments
-    env = make_env(args.env_batch_size, device=args.device, ego_image=True, ego_patch_radius=10, seed=args.seed)
+    env = make_env(args.env_batch_size, device=args.device, abs_image=True, ego_patch_radius=10, seed=args.seed)
     check_env_specs(env)
-    eval_env = make_env(32, device=args.device, ego_image=True, ego_patch_radius=10, seed=args.seed)
+    eval_env = make_env(32, device=args.device, abs_image=True, ego_patch_radius=10, seed=args.seed)
 
     # networks
-    in_channels = env.observation_spec['ego_image'].shape[-3]
+    in_channels = env.observation_spec['image'].shape[-3]
     actions_n = env.action_spec.n
 
     value_net = Value(in_channels=in_channels, power=args.power, hidden_dim=args.hidden_dim)
@@ -163,12 +163,12 @@ def train(args):
 
     value_module = ValueOperator(
         module=value_net,
-        in_keys=['ego_image']
+        in_keys=['image']
     ).to(args.device)
 
     policy_module = TensorDictModule(
         policy_net,
-        in_keys=['ego_image'],
+        in_keys=['image'],
         out_keys=['logits'],
     )
 
@@ -350,7 +350,7 @@ def load_policy_from_checkpoint(checkpoint_filename, in_channels, actions_n, dev
     policy_net = Policy(in_channels=in_channels, power=power, hidden_dim=hidden_dim, actions_n=actions_n)
     policy_module = TensorDictModule(
         policy_net,
-        in_keys=['ego_image'],
+        in_keys=['image'],
         out_keys=['logits'],
     )
     policy_module = ProbabilisticActor(
@@ -366,10 +366,10 @@ def load_policy_from_checkpoint(checkpoint_filename, in_channels, actions_n, dev
 
 def rollout_checkpoint(chkpt, suffix, logger, device='cpu', seed=42, len=400):
     with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
-        eval_env = make_env(32, device=device, ego_image=True, ego_patch_radius=10,
+        eval_env = make_env(32, device=device, abs_image=True, ego_patch_radius=10,
                             seed=seed, log_video=True, logger=logger)
         print(f"rolling out policy {suffix}")
-        in_channels = eval_env.observation_spec['ego_image'].shape[-3]
+        in_channels = eval_env.observation_spec['image'].shape[-3]
         actions_n = eval_env.action_spec.n
         policy_module = load_policy_from_checkpoint(chkpt, in_channels, actions_n, device=device)
         eval_env.rollout(len, policy_module, break_when_any_done=False)
