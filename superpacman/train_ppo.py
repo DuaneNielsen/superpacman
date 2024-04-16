@@ -18,8 +18,8 @@ from warnings import warn
 from math import inf
 from torchrl.record.loggers import get_logger, generate_exp_name
 from torchrl.record import CSVLogger
-from torch.nn.functional import selu
 from importlib.metadata import version, PackageNotFoundError
+from hrid import HRID
 
 
 class VGGConvBlock(nn.Module):
@@ -122,7 +122,7 @@ def train(args):
     except PackageNotFoundError:
         pass
 
-    exp_name = generate_exp_name(model_name=f'superpacman', experiment_name='ppo')
+    exp_name = HRID().generate()
     if args.logger == 'csv':
         logger = CSVLogger(exp_name, args.logger, video_format='mp4', video_fps=3)
     else:
