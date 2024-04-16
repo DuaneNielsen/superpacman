@@ -23,13 +23,15 @@ from hrid import HRID
 
 
 class VGGConvBlock(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, batchnorm_momentum=0.001):
         super().__init__()
         self.layers = nn.Sequential(
             nn.Conv2d(in_channels=in_channels, out_channels=128, stride=1, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128, momentum=batchnorm_momentum, track_running_stats=False),
             nn.SELU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256, momentum=batchnorm_momentum, track_running_stats=False),
             nn.SELU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2)
         )
@@ -50,20 +52,26 @@ class Value(nn.Module):
     MLP value function
     """
 
-    def __init__(self, in_features, in_channels, hidden_dim):
+    def __init__(self, in_features, in_channels, hidden_dim, batchnorm_momentum=0.001):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
+            # nn.BatchNorm1d(hidden_dim, momentum=batchnorm_momentum, track_running_stats=False),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=1, bias=False)
         )
-        self.convblock = VGGConvBlock(in_channels)
+        self.convblock = VGGConvBlock(in_channels, batchnorm_momentum=batchnorm_momentum)
 
     def forward(self, flat_obs, image):
         conv_values = self.convblock(image)
         features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
-        values = self.net(features)
-        return values
+        shape = features.shape
+        if len(shape) == 3:
+            features = features.flatten(0, 1)
+            values = self.net(features)
+            return values.unflatten(0, shape[0:2])
+        else:
+            return self.net(features)
 
 
 class Policy(nn.Module):
@@ -71,19 +79,26 @@ class Policy(nn.Module):
     Policy network for flat observation
     """
 
-    def __init__(self, in_features, in_channels, hidden_dim, actions_n):
+    def __init__(self, in_features, in_channels, hidden_dim, actions_n, batchnorm_momentum=0.001):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
+            nn.BatchNorm1d(hidden_dim, momentum=batchnorm_momentum, track_running_stats=False),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
         )
-        self.convblock = VGGConvBlock(in_channels)
+        self.convblock = VGGConvBlock(in_channels, batchnorm_momentum=batchnorm_momentum)
 
     def forward(self, flat_obs, image):
         conv_values = self.convblock(image)
         features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
-        return log_softmax(self.net(features), dim=-1)
+        shape = features.shape
+        if len(shape) == 3:
+            features = features.flatten(0, 1)
+            logits = log_softmax(self.net(features), dim=-1)
+            return logits.unflatten(0, shape[0:2])
+        else:
+            return log_softmax(self.net(features), dim=-1)
 
 
 IN_KEYS = ['flat_obs', 'ego_image']
