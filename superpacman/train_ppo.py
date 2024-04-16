@@ -147,9 +147,13 @@ def train(args):
     total_frames = args.env_batch_size * args.steps_per_batch * args.train_steps
 
     # environments
-    env = make_env(args.env_batch_size, IN_KEYS, device=args.device, ego_patch_radius=EGO_PATCH_RADIUS, seed=args.seed)
+    env = make_env(args.env_batch_size, IN_KEYS,
+                   device=args.device, ego_patch_radius=EGO_PATCH_RADIUS, seed=args.seed,
+                   max_steps=args.max_steps_per_traj)
     check_env_specs(env)
-    eval_env = make_env(32, IN_KEYS, device=args.device, ego_patch_radius=EGO_PATCH_RADIUS, seed=args.seed)
+    eval_env = make_env(32, IN_KEYS,
+                        device=args.device, ego_patch_radius=EGO_PATCH_RADIUS, seed=args.seed,
+                        max_steps=args.max_steps_per_traj)
 
     # networks
     in_features = env.observation_spec['flat_obs'].shape[-1]
@@ -337,11 +341,11 @@ def train(args):
                            seed=args.seed, len=args.eval_len)
 
 
-def rollout_checkpoint(checkpoint_filename, suffix, logger, device='cpu', seed=42, len=400):
+def rollout_checkpoint(checkpoint_filename, suffix, logger, device='cpu', seed=42, len=400, max_steps_per_trajectory=1600):
     with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
 
         eval_env = make_env(32, IN_KEYS, device=device, ego_patch_radius=EGO_PATCH_RADIUS,
-                            seed=seed, log_video=True, logger=logger)
+                            seed=seed, log_video=True, logger=logger, max_steps=max_steps_per_trajectory)
 
         in_features = eval_env.observation_spec['flat_obs'].shape[-1]
         in_channels = eval_env.observation_spec['ego_image'].shape[-3]
@@ -363,4 +367,4 @@ def enjoy_checkpoint(args):
     filename = Path(args.checkpoint).name
     logger = CSVLogger(filename, './enjoy', video_format='mp4', video_fps=3)
     rollout_checkpoint(args.checkpoint, suffix=filename, device=args.device, logger=logger, seed=args.seed,
-                       len=args.length)
+                       len=args.length, max_steps_per_trajectory=args.max_steps_per_traj)

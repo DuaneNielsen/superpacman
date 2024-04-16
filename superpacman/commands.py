@@ -25,6 +25,7 @@ def main():
     train_ppo_parser.add_argument('--max_grad_norm', type=float, default=1.0, help="gradient clipping")
     train_ppo_parser.add_argument('--power', type=int, default=5, help="power of squeezenet")
     train_ppo_parser.add_argument('--hidden_dim', type=int, default=64, help="hidden dim size of MLP")
+    train_ppo_parser.add_argument('--max_steps_per_traj', type=int, default=1600, help="maximum length of a trajectory")
     train_ppo_parser.add_argument('--lr', type=float, default=1e-3, help="Adam learning rate")
     train_ppo_parser.add_argument('--lr_sched_step_size', type=int, default=1e5, help="decay lr after this many steps")
     train_ppo_parser.add_argument('--lr_sched_gamma', type=int, default=0.7, help="decay lr after this many steps")
@@ -42,6 +43,7 @@ def main():
     enjoy_parser.add_argument('--device', type=str, default='cpu')
     enjoy_parser.add_argument('--seed', type=int, default=42)
     enjoy_parser.add_argument('--length', type=int, default=400, help='rollout length')
+    enjoy_parser.add_argument('--max_steps_per_traj', type=int, default=1600, help="maximum length of a trajectory")
     enjoy_parser.set_defaults(func=train_ppo.enjoy_checkpoint)
 
     args = parser.parse_args()
