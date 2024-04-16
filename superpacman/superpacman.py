@@ -717,7 +717,7 @@ def has_transform(env, transform_class):
 
 def make_env(env_batch_size, obs_keys=None, device='cpu',
              ego_patch_radius=10, log_video=False,  log_stats=True, seed=None,
-             logger=None, max_steps=1600):
+             logger=None, max_steps=None):
 
     assert env_batch_size > 1, "sorry, batch size 1 is not supported yet, try batch size 2"
 

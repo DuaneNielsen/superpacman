@@ -341,7 +341,7 @@ def train(args):
                            seed=args.seed, len=args.eval_len)
 
 
-def rollout_checkpoint(checkpoint_filename, suffix, logger, device='cpu', seed=42, len=400, max_steps_per_trajectory=1600):
+def rollout_checkpoint(checkpoint_filename, suffix, logger, device='cpu', seed=42, len=400, max_steps_per_trajectory=None):
     with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
 
         eval_env = make_env(32, IN_KEYS, device=device, ego_patch_radius=EGO_PATCH_RADIUS,
