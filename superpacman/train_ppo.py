@@ -56,7 +56,7 @@ class Value(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
-            # nn.BatchNorm1d(hidden_dim, momentum=batchnorm_momentum, track_running_stats=False),
+            nn.LayerNorm(hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=1, bias=False)
         )
@@ -83,7 +83,7 @@ class Policy(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
-            nn.BatchNorm1d(hidden_dim, momentum=batchnorm_momentum, track_running_stats=False),
+            nn.LayerNorm(hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
         )
