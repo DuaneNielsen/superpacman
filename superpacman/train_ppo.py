@@ -248,12 +248,15 @@ def train(args):
 
         # PPO update
         for _ in range(args.ppo_steps):
+            import torch.cuda
+            torch.cuda.memory._record_memory_history()
             advantage_module(tensordict_data)
             loss_vals = loss_module(tensordict_data)
             loss_value = (loss_vals["loss_objective"] + loss_vals["loss_critic"] + loss_vals["loss_entropy"])
             loss_value.backward()
             torch.nn.utils.clip_grad_norm_(loss_module.parameters(), args.max_grad_norm)
             optim.step()
+            torch.cuda.memory._dump_snapshot("my_snapshot.pickle")
             optim.zero_grad()
 
         scheduler.step()
