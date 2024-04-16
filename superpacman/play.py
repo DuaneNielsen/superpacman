@@ -8,14 +8,15 @@ import matplotlib
 
 
 def play(args):
-    matplotlib.use('TkAgg')
+    matplotlib.use('QtAgg')
+
     keymap = {"up": Actions.N, "right": Actions.E, "down": Actions.S, "left": Actions.W}
 
     if args.partial_radius > 0:
-        env = make_env(2, 'cpu', ego_pixel=True, ego_patch_radius=args.partial_radius)
+        env = make_env(2, "ego_pixels", 'cpu', ego_patch_radius=args.partial_radius)
         pixel_key = 'ego_pixels'
     else:
-        env = make_env(2, 'cpu', abs_pixel=True)
+        env = make_env(2, "pixels", 'cpu')
         pixel_key = 'pixels'
 
     check_env_specs(env)
