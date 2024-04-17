@@ -23,6 +23,7 @@ def main():
     train_ppo_parser.add_argument('--lmbda', type=float, default=0.99, help="GAE lambda parameter")
     train_ppo_parser.add_argument('--entropy_eps', type=float, default=0.08, help="policy entropy bonus weight")
     train_ppo_parser.add_argument('--max_grad_norm', type=float, default=1.0, help="gradient clipping")
+    train_ppo_parser.add_argument('--batchnorm_momentum', type=float, default=0.001, help="batchnorm moving ave")
     train_ppo_parser.add_argument('--power', type=int, default=5, help="power of squeezenet")
     train_ppo_parser.add_argument('--hidden_dim', type=int, default=64, help="hidden dim size of MLP")
     train_ppo_parser.add_argument('--max_steps_per_traj', type=int, default=None, help="maximum length of a trajectory")

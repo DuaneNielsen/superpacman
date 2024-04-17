@@ -13,7 +13,7 @@ command:
   - --eval_len
   - 1600
   - --train_steps
-  - 5000
+  - 10000
   - ${args}
 
 program: superpacman.commands
@@ -23,7 +23,7 @@ metric:
   goal: maximize
 parameters:
   env_batch_size:
-    values: [128, 256, 512, 1024]
+    values: [256]
   steps_per_batch:
     values: [16]
   clip_epsilon:
@@ -38,6 +38,8 @@ parameters:
     values: [1.0]
   hidden_dim:
     values: [64, 32, 16]
+  batchnorm_momentum:
+    values: [0.1, 0.01, 0.001]
   lr:
     values: [1e-4]
   seed:

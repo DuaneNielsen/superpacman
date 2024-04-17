@@ -46,7 +46,7 @@ class ResBlock(nn.Module):
 class ResNet(nn.Module):
     CHANNEL_0 = 64
     CHANNEL_1 = 128
-    OUTPUT_CHANNELS = 128
+    OUTPUT_CHANNELS = 256
 
     def __init__(self, in_channels, batchnorm_momentum=0.001):
         super().__init__()
@@ -211,8 +211,8 @@ def train(args):
     in_channels = env.observation_spec['ego_image'].shape[-3]
     actions_n = env.action_spec.n
 
-    value_net = Value(in_features=in_features, in_channels=in_channels, hidden_dim=args.hidden_dim)
-    policy_net = Policy(in_features=in_features, in_channels=in_channels, hidden_dim=args.hidden_dim, actions_n=actions_n)
+    value_net = Value(in_features=in_features, in_channels=in_channels, hidden_dim=args.hidden_dim, batchnorm_momentum=args.batchnorm_momentum)
+    policy_net = Policy(in_features=in_features, in_channels=in_channels, hidden_dim=args.hidden_dim, actions_n=actions_n, batchnorm_momentum=args.batchnorm_momentum)
 
     value_params = sum(p.numel() for p in value_net.parameters() if p.requires_grad)
     policy_params = sum(p.numel() for p in value_net.parameters() if p.requires_grad)
