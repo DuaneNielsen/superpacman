@@ -130,7 +130,7 @@ class Policy(nn.Module):
 
     def __init__(self, in_features, in_channels, hidden_dim, actions_n, batchnorm_momentum=0.001):
         super().__init__()
-        self.convblock = VGGConvBlock(in_channels, batchnorm_momentum=batchnorm_momentum)
+        self.convblock = ResNet(in_channels, batchnorm_momentum=batchnorm_momentum)
         self.net = nn.Sequential(
             nn.Linear(in_features=in_features + self.convblock.OUTPUT_CHANNELS * 4, out_features=hidden_dim),
             nn.LayerNorm(hidden_dim),
