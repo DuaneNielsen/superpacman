@@ -21,11 +21,57 @@ from torchrl.record import CSVLogger
 from importlib.metadata import version, PackageNotFoundError
 from hrid import HRID
 import torch.cuda
+from torch.nn.functional import relu
+
+
+class ResBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, batchnorm_momentum):
+        super().__init__()
+        self.c1 = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, stride=1, kernel_size=3, padding=1)
+        self.b1 = nn.BatchNorm2d(out_channels, momentum=batchnorm_momentum, track_running_stats=False)
+        self.c2 = nn.Conv2d(in_channels=out_channels, out_channels=out_channels, stride=1, kernel_size=3, padding=1)
+        if in_channels != out_channels:
+            self.downsample = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1)
+        else:
+            self.downsample = None
+
+    def forward(self, image):
+        activations = relu(self.b1(self.c1(image)))
+        if self.downsample:
+            return relu(self.c2(activations) + self.downsample(image))
+        else:
+            return relu(self.c2(activations) + image)
+
+
+class ResNet(nn.Module):
+    CHANNEL_0 = 64
+    CHANNEL_1 = 128
+    OUTPUT_CHANNELS = 128
+
+    def __init__(self, in_channels, batchnorm_momentum=0.001):
+        super().__init__()
+        self.layers = nn.Sequential(
+            ResBlock(in_channels, out_channels=self.CHANNEL_0, batchnorm_momentum=batchnorm_momentum),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ResBlock(self.CHANNEL_0, out_channels=self.CHANNEL_1, batchnorm_momentum=batchnorm_momentum),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ResBlock(self.CHANNEL_1, self.OUTPUT_CHANNELS, batchnorm_momentum=batchnorm_momentum)
+        )
+
+    def forward(self, image):
+        if len(image.shape) == 5:
+            N, L, C, H, W = image.shape
+            image = image.flatten(0, 1)
+            image = self.layers(image)
+            image = image.unflatten(0, (N, L))
+        else:
+            image = self.layers(image)
+        return image
 
 
 class VGGConvBlock(nn.Module):
     CHANNEL_0 = 64
-    CHANNEL_1 = 128
+    OUTPUT_CHANNELS = 128
     def __init__(self, in_channels, batchnorm_momentum=0.001):
         super().__init__()
         self.layers = nn.Sequential(
@@ -33,8 +79,8 @@ class VGGConvBlock(nn.Module):
             nn.BatchNorm2d(self.CHANNEL_0, momentum=batchnorm_momentum, track_running_stats=False),
             nn.SELU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=self.CHANNEL_0, out_channels=self.CHANNEL_1, stride=1, kernel_size=3, padding=1),
-            nn.BatchNorm2d(self.CHANNEL_1, momentum=batchnorm_momentum, track_running_stats=False),
+            nn.Conv2d(in_channels=self.CHANNEL_0, out_channels=self.OUTPUT_CHANNELS, stride=1, kernel_size=3, padding=1),
+            nn.BatchNorm2d(self.OUTPUT_CHANNELS, momentum=batchnorm_momentum, track_running_stats=False),
             nn.SELU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2)
         )
@@ -57,9 +103,9 @@ class Value(nn.Module):
 
     def __init__(self, in_features, in_channels, hidden_dim, batchnorm_momentum=0.001):
         super().__init__()
-        self.convblock = VGGConvBlock(in_channels, batchnorm_momentum=batchnorm_momentum)
+        self.convblock = ResNet(in_channels, batchnorm_momentum=batchnorm_momentum)
         self.net = nn.Sequential(
-            nn.Linear(in_features=in_features + self.convblock.CHANNEL_1 * 4, out_features=hidden_dim),
+            nn.Linear(in_features=in_features + self.convblock.OUTPUT_CHANNELS * 4, out_features=hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=1, bias=False)
@@ -86,7 +132,7 @@ class Policy(nn.Module):
         super().__init__()
         self.convblock = VGGConvBlock(in_channels, batchnorm_momentum=batchnorm_momentum)
         self.net = nn.Sequential(
-            nn.Linear(in_features=in_features + self.convblock.CHANNEL_1 * 4, out_features=hidden_dim),
+            nn.Linear(in_features=in_features + self.convblock.OUTPUT_CHANNELS * 4, out_features=hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
