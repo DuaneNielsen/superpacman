@@ -33,6 +33,7 @@ jobs:
       - name: Install dependencies
         run: | 
           python -m pip install --upgrade pip
+          ls
           pip install -e .
           pip install -e .[dev]
       - name: Build HTML
