@@ -20,18 +20,21 @@ from torchrl.record.loggers import get_logger, generate_exp_name
 from torchrl.record import CSVLogger
 from importlib.metadata import version, PackageNotFoundError
 from hrid import HRID
+import torch.cuda
 
 
 class VGGConvBlock(nn.Module):
+    CHANNEL_0 = 64
+    CHANNEL_1 = 128
     def __init__(self, in_channels, batchnorm_momentum=0.001):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Conv2d(in_channels=in_channels, out_channels=128, stride=1, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128, momentum=batchnorm_momentum, track_running_stats=False),
+            nn.Conv2d(in_channels=in_channels, out_channels=self.CHANNEL_0, stride=1, kernel_size=3, padding=1),
+            nn.BatchNorm2d(self.CHANNEL_0, momentum=batchnorm_momentum, track_running_stats=False),
             nn.SELU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256, momentum=batchnorm_momentum, track_running_stats=False),
+            nn.Conv2d(in_channels=self.CHANNEL_0, out_channels=self.CHANNEL_1, stride=1, kernel_size=3, padding=1),
+            nn.BatchNorm2d(self.CHANNEL_1, momentum=batchnorm_momentum, track_running_stats=False),
             nn.SELU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2)
         )
@@ -54,13 +57,13 @@ class Value(nn.Module):
 
     def __init__(self, in_features, in_channels, hidden_dim, batchnorm_momentum=0.001):
         super().__init__()
+        self.convblock = VGGConvBlock(in_channels, batchnorm_momentum=batchnorm_momentum)
         self.net = nn.Sequential(
-            nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
+            nn.Linear(in_features=in_features + self.convblock.CHANNEL_1 * 4, out_features=hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=1, bias=False)
         )
-        self.convblock = VGGConvBlock(in_channels, batchnorm_momentum=batchnorm_momentum)
 
     def forward(self, flat_obs, image):
         conv_values = self.convblock(image)
@@ -81,13 +84,13 @@ class Policy(nn.Module):
 
     def __init__(self, in_features, in_channels, hidden_dim, actions_n, batchnorm_momentum=0.001):
         super().__init__()
+        self.convblock = VGGConvBlock(in_channels, batchnorm_momentum=batchnorm_momentum)
         self.net = nn.Sequential(
-            nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
+            nn.Linear(in_features=in_features + self.convblock.CHANNEL_1 * 4, out_features=hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
         )
-        self.convblock = VGGConvBlock(in_channels, batchnorm_momentum=batchnorm_momentum)
 
     def forward(self, flat_obs, image):
         conv_values = self.convblock(image)
@@ -95,7 +98,9 @@ class Policy(nn.Module):
         shape = features.shape
         if len(shape) == 3:
             features = features.flatten(0, 1)
+            # torch.cuda.memory._record_memory_history()
             logits = log_softmax(self.net(features), dim=-1)
+            # torch.cuda.memory._dump_snapshot("policy_convnet_snapshot.pickle")
             return logits.unflatten(0, shape[0:2])
         else:
             return log_softmax(self.net(features), dim=-1)
@@ -242,21 +247,20 @@ def train(args):
     train_reward_mean, train_reward_max, eval_reward_mean = 0., 0., 0.
     after_update = time()
 
+    # torch.cuda.memory._record_memory_history()
     for i, tensordict_data in enumerate(collector):
+
         after_collect = time()
         env_time = after_collect - after_update
 
         # PPO update
         for _ in range(args.ppo_steps):
-            import torch.cuda
-            torch.cuda.memory._record_memory_history()
             advantage_module(tensordict_data)
             loss_vals = loss_module(tensordict_data)
             loss_value = (loss_vals["loss_objective"] + loss_vals["loss_critic"] + loss_vals["loss_entropy"])
             loss_value.backward()
             torch.nn.utils.clip_grad_norm_(loss_module.parameters(), args.max_grad_norm)
             optim.step()
-            torch.cuda.memory._dump_snapshot("my_snapshot.pickle")
             optim.zero_grad()
 
         scheduler.step()
@@ -316,11 +320,11 @@ def train(args):
                     logger.log_scalar(name, value, step=i)
 
                 eval_reward_mean = epi_stats['eval_episode_reward_mean']
-
                 pbar.set_description(f'saving checkpoint {eval_reward_mean:.2f}')
                 save_checkpoint(f'checkpoints/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
 
     pbar.close()
+    # torch.cuda.memory._dump_snapshot("full_snapshot.pickle")
 
     # once training is done, write a video of the best policy we found
     def best_checkpt(directory):
