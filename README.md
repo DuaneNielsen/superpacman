@@ -1,6 +1,12 @@
+
+
 # superpacman
 
 A stateless, vectorized implementation of pacman, implemented in torchRL
+
+
+[![Documentation](https://img.shields.io/badge/docs-available-brightgreen.svg)](https://duanenielsen.github.io/superpacman/)
+
 
 
 
