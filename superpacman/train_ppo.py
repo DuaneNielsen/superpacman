@@ -23,7 +23,7 @@ from hrid import HRID
 
 
 class VGGConvBlock(nn.Module):
-    def __init__(self, in_channels, batchnorm_momentum=0.001):
+    def __init__(self, in_channels, batchnorm_momentum=0.1):
         super().__init__()
         self.layers = nn.Sequential(
             nn.Conv2d(in_channels=in_channels, out_channels=128, stride=1, kernel_size=3, padding=1),
@@ -52,7 +52,7 @@ class Value(nn.Module):
     MLP value function
     """
 
-    def __init__(self, in_features, in_channels, hidden_dim, batchnorm_momentum=0.001):
+    def __init__(self, in_features, in_channels, hidden_dim, batchnorm_momentum=0.1):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
@@ -79,7 +79,7 @@ class Policy(nn.Module):
     Policy network for flat observation
     """
 
-    def __init__(self, in_features, in_channels, hidden_dim, actions_n, batchnorm_momentum=0.001):
+    def __init__(self, in_features, in_channels, hidden_dim, actions_n, batchnorm_momentum=0.1):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
