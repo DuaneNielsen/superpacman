@@ -20,6 +20,7 @@ from torchrl.record.loggers import get_logger, generate_exp_name
 from torchrl.record import CSVLogger
 from importlib.metadata import version, PackageNotFoundError
 from hrid import HRID
+from statistics import mean, stdev
 
 
 class VGGConvBlock(nn.Module):
@@ -237,6 +238,18 @@ def train(args):
     if args.load_checkpoint:
         load_checkpoint(args.load_checkpoint)
 
+    def log_episode_stats(tensordict_data, key):
+        terminal_values = tensordict_data['next', key][tensordict_data['next', 'done']].flatten().tolist()
+        value_mean, value_max, valu_std = None, None, None
+        if len(terminal_values) > 0:
+            value_mean, value_max = mean(terminal_values), max(terminal_values)
+            logger.log_scalar(f"{key}_mean", value_mean)
+            logger.log_scalar(f"{key}_max", value_max)
+        if len(terminal_values) >= 2:
+            value_std = stdev(terminal_values)
+            logger.log_scalar(f"{key}_stdv", value_std)
+        return value_mean, value_max, valu_std
+
     # ready to start the training loop
     pbar = tqdm.tqdm(total=total_frames)
     train_reward_mean, train_reward_max, eval_reward_mean = 0., 0., 0.
@@ -245,6 +258,8 @@ def train(args):
     for i, tensordict_data in enumerate(collector):
         after_collect = time()
         env_time = after_collect - after_update
+        train_reward_mean, train_reward_max, _ = log_episode_stats(tensordict_data, "episode_reward")
+        step_count_mean, step_count_max, _ = log_episode_stats(tensordict_data, "step_count")
 
         # PPO update
         for _ in range(args.ppo_steps):
@@ -261,19 +276,14 @@ def train(args):
         update_time = after_update - after_collect
 
         # and now for the logging
-        def retrieve_episode_stats(tensordict_data, loss_value, prefix=None):
+        def training_stats(state_dict, loss_value, prefix=None):
+
             with torch.no_grad():
                 prefix = '' if prefix is None else f"{prefix}_"
-                episode_reward = tensordict_data["next", "episode_reward"]
-                step_count = tensordict_data["step_count"].float()
-                state_value = tensordict_data['state_value']
+                state_value = state_dict['state_value']
                 entropy = loss_value['entropy']
+
                 return {
-                    f"{prefix}episode_reward_mean": episode_reward.mean().item(),
-                    f"{prefix}episode_reward_max": episode_reward.max().item(),
-                    f"{prefix}episode_reward_stdev": torch.std(episode_reward).item(),
-                    f"{prefix}step_count_max": step_count.max().item(),
-                    f"{prefix}step_count_mean": step_count.mean().item(),
                     f"{prefix}state_value_max": state_value.max().item(),
                     f"{prefix}state_value_mean": state_value.mean().item(),
                     f"{prefix}state_value_min": state_value.min().item(),
@@ -283,7 +293,8 @@ def train(args):
                 }
 
         if i % 10 == 0:
-            epi_stats = retrieve_episode_stats(tensordict_data, loss_vals, 'train')
+
+            epi_stats = training_stats(tensordict_data, loss_vals, 'train')
             train_stats = {
                 "train_learning rate": scheduler.get_last_lr()[0],
                 "train_env_time": env_time,
@@ -293,29 +304,28 @@ def train(args):
             for name, value in stats.items():
                 logger.log_scalar(name, value, step=i)
 
-            train_reward_mean = epi_stats['train_episode_reward_mean']
-            train_reward_max = epi_stats['train_episode_reward_max']
-
-        pbar.set_description(
-            f'train reward mean/max {train_reward_mean:.2f}/{train_reward_max:.2f} eval reward mean: {eval_reward_mean:.2f}')
-        pbar.update(tensordict_data.numel())
+        if train_reward_mean is not None and eval_reward_mean is not None:
+            pbar.set_description(
+                f'train reward mean/max {train_reward_mean:.2f}/{train_reward_max:.2f} eval reward mean: {eval_reward_mean:.2f}')
+            pbar.update(tensordict_data.numel())
 
         # evaluation
         if i % args.eval_freq == 0:
             with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
                 pbar.set_description('starting eval rollout')
                 eval_rollout = eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
+                evan_reward_mean, reward_max, _ = log_episode_stats(eval_rollout, "episode_reward")
+                step_count_mean, step_count_max, _ = log_episode_stats(eval_rollout, "step_count")
                 pbar.set_description('computing stats')
                 advantage_module(eval_rollout)
                 loss = loss_module(eval_rollout)
-                epi_stats = retrieve_episode_stats(eval_rollout, loss, prefix='eval')
+                epi_stats = training_stats(eval_rollout, loss, prefix='eval')
                 for name, value in epi_stats.items():
                     logger.log_scalar(name, value, step=i)
 
-                eval_reward_mean = epi_stats['eval_episode_reward_mean']
-
-                pbar.set_description(f'saving checkpoint {eval_reward_mean:.2f}')
-                save_checkpoint(f'checkpoints/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
+                if eval_reward_mean is not None:
+                    pbar.set_description(f'saving checkpoint {eval_reward_mean:.2f}')
+                    save_checkpoint(f'checkpoints/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
 
     pbar.close()
 

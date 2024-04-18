@@ -718,6 +718,39 @@ def has_transform(env, transform_class):
 def make_env(env_batch_size, obs_keys=None, device='cpu',
              ego_patch_radius=10, log_video=False,  log_stats=True, seed=None,
              logger=None, max_steps=None):
+    """
+
+    configures and returns a Superpacman environment, ready to use.
+
+    Args:
+        env_batch_size: the number of environments N to run in parallel
+        obs_keys: a string or list of strings.. valid values are
+            "image" => adds a (N, 9, 21, 21) tensor to the state tensordict in key ['image']
+            "ego_image" => adds a (N, 9, ego_patch_radius * 2 + 1, ego_patch_radius * 2 + 1) tensor centered on pacman in key['ego_image']
+            "pixels" => adds a (N, 3, 21, 21) RGB image in key ['pixels']
+            "ego_pixels" -> add a (N, 3, ego_patch_radius * 2 + 1, ego_patch_radius * 2 + 1) tensor centered on pacman in key['ego_pixels']
+        device: device to use, "cuda" or "cpu"
+        ego_patch_radius: if "ego_image" or "ego_pixels", then this set the visible radius around pacman
+        log_video:  if true, the environment will enable logging RGB video to log...
+          >>> env = make_env(9, log_video=True)
+          >>> env.rollout(100)
+          >>> env.recorder.dump("hello")
+          by default logs will be created in logs/superpacman/videos/pacman_hello_0.mp4
+          set a logger to control where the logs will be set
+          # note... logging video will increase memory utilization, so don't use it in the training loop unless debugging
+        log_stats: adds ['step_count'] and ['episode_reward'] to the state dict, step_count being the total number
+        of steps on the trajectory.. episode_reward is set to the sum of reward recieved so far
+        Make sure you use the "next" key to get episode_reward eg:
+        >>> env = make_env(8)
+        >>> state = env.rollout(2, break_when_any_done=True, seed=42)
+        >>> state[0][-1]['next', 'episode_reward']
+        seed: random seed to use.. default None
+        logger:
+        max_steps:
+
+    Returns:
+
+    """
 
     assert env_batch_size > 1, "sorry, batch size 1 is not supported yet, try batch size 2"
 
@@ -741,7 +774,7 @@ def make_env(env_batch_size, obs_keys=None, device='cpu',
     if "pixels" in obs_keys:
         env.append_transform(RGBFullObsTransform())
 
-    if "ego_pixel" in obs_keys:
+    if "ego_pixels" in obs_keys:
         if not has_transform(env, CenterPlayerTransform):
             env.append_transform(CenterPlayerTransform(patch_radius=ego_patch_radius))
         env.append_transform(RGBPartialObsTransform())
