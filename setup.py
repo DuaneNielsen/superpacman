@@ -28,7 +28,7 @@ setup(
     python_requires='>=3.8',
     install_requires=["torch", "torchrl", "torchvision", "matplotlib", "tqdm", "av", "moviepy", "hrid", "PyQt5"],
     extras_require={
-        "dev": ['twine', 'wheel', 'setuptools', 'sphinx', 'sphinx_rtd_theme'],
+        "dev": ['twine', 'wheel', 'setuptools', 'sphinx', 'sphinx_rtd_theme', 'ghp_import'],
     },
     entry_points={
         'console_scripts':
