@@ -1,16 +1,15 @@
 from setuptools import setup, find_packages
 import subprocess
-import os
 
-superpacman_remote_version = subprocess.run(['git', 'describe', '--tags'], stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
-assert "." in superpacman_remote_version
+VERSION = subprocess.run(['git', 'describe', '--tags'], stdout=subprocess.PIPE).stdout.decode("utf-8").strip().split('-')[0]
+assert "." in VERSION, f"version {VERSION} does not contain dots"
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
     name="superpacman",
-    version=superpacman_remote_version,
+    version=VERSION,
     author="Duane Nielsen",
     author_email="duanenielsen@example.com",
     description="The SuperPacman reinforcement learning environment",
