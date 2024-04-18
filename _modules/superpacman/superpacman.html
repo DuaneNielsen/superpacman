@@ -862,6 +862,39 @@
 <span class="k">def</span> <span class="nf">make_env</span><span class="p">(</span><span class="n">env_batch_size</span><span class="p">,</span> <span class="n">obs_keys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cpu&#39;</span><span class="p">,</span>
              <span class="n">ego_patch_radius</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">log_video</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>  <span class="n">log_stats</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
              <span class="n">logger</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_steps</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    configures and returns a Superpacman environment, ready to use.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        env_batch_size: the number of environments N to run in parallel</span>
+<span class="sd">        obs_keys: a string or list of strings.. valid values are</span>
+<span class="sd">            &quot;image&quot; =&gt; adds a (N, 9, 21, 21) tensor to the state tensordict in key [&#39;image&#39;]</span>
+<span class="sd">            &quot;ego_image&quot; =&gt; adds a (N, 9, ego_patch_radius * 2 + 1, ego_patch_radius * 2 + 1) tensor centered on pacman in key[&#39;ego_image&#39;]</span>
+<span class="sd">            &quot;pixels&quot; =&gt; adds a (N, 3, 21, 21) RGB image in key [&#39;pixels&#39;]</span>
+<span class="sd">            &quot;ego_pixels&quot; -&gt; add a (N, 3, ego_patch_radius * 2 + 1, ego_patch_radius * 2 + 1) tensor centered on pacman in key[&#39;ego_pixels&#39;]</span>
+<span class="sd">        device: device to use, &quot;cuda&quot; or &quot;cpu&quot;</span>
+<span class="sd">        ego_patch_radius: if &quot;ego_image&quot; or &quot;ego_pixels&quot;, then this set the visible radius around pacman</span>
+<span class="sd">        log_video:  if true, the environment will enable logging RGB video to log...</span>
+<span class="sd">          &gt;&gt;&gt; env = make_env(9, log_video=True)</span>
+<span class="sd">          &gt;&gt;&gt; env.rollout(100)</span>
+<span class="sd">          &gt;&gt;&gt; env.recorder.dump(&quot;hello&quot;)</span>
+<span class="sd">          by default logs will be created in logs/superpacman/videos/pacman_hello_0.mp4</span>
+<span class="sd">          set a logger to control where the logs will be set</span>
+<span class="sd">          # note... logging video will increase memory utilization, so don&#39;t use it in the training loop unless debugging</span>
+<span class="sd">        log_stats: adds [&#39;step_count&#39;] and [&#39;episode_reward&#39;] to the state dict, step_count being the total number</span>
+<span class="sd">        of steps on the trajectory.. episode_reward is set to the sum of reward recieved so far</span>
+<span class="sd">        Make sure you use the &quot;next&quot; key to get episode_reward eg:</span>
+<span class="sd">        &gt;&gt;&gt; env = make_env(8)</span>
+<span class="sd">        &gt;&gt;&gt; state = env.rollout(2, break_when_any_done=True, seed=42)</span>
+<span class="sd">        &gt;&gt;&gt; state[0][-1][&#39;next&#39;, &#39;episode_reward&#39;]</span>
+<span class="sd">        seed: random seed to use.. default None</span>
+<span class="sd">        logger:</span>
+<span class="sd">        max_steps:</span>
+
+<span class="sd">    Returns:</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">assert</span> <span class="n">env_batch_size</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;sorry, batch size 1 is not supported yet, try batch size 2&quot;</span>
 
@@ -885,7 +918,7 @@
     <span class="k">if</span> <span class="s2">&quot;pixels&quot;</span> <span class="ow">in</span> <span class="n">obs_keys</span><span class="p">:</span>
         <span class="n">env</span><span class="o">.</span><span class="n">append_transform</span><span class="p">(</span><span class="n">RGBFullObsTransform</span><span class="p">())</span>
 
-    <span class="k">if</span> <span class="s2">&quot;ego_pixel&quot;</span> <span class="ow">in</span> <span class="n">obs_keys</span><span class="p">:</span>
+    <span class="k">if</span> <span class="s2">&quot;ego_pixels&quot;</span> <span class="ow">in</span> <span class="n">obs_keys</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">has_transform</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="n">CenterPlayerTransform</span><span class="p">):</span>
             <span class="n">env</span><span class="o">.</span><span class="n">append_transform</span><span class="p">(</span><span class="n">CenterPlayerTransform</span><span class="p">(</span><span class="n">patch_radius</span><span class="o">=</span><span class="n">ego_patch_radius</span><span class="p">))</span>
         <span class="n">env</span><span class="o">.</span><span class="n">append_transform</span><span class="p">(</span><span class="n">RGBPartialObsTransform</span><span class="p">())</span>

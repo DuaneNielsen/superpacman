@@ -440,7 +440,40 @@ rewards: The amount of reward for entering the tile.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="superpacman.superpacman.make_env">
 <span class="sig-prename descclassname"><span class="pre">superpacman.superpacman.</span></span><span class="sig-name descname"><span class="pre">make_env</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_batch_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obs_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ego_patch_radius</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_video</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_stats</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logger</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/superpacman.html#make_env"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.superpacman.make_env" title="Link to this definition"></a></dt>
-<dd></dd></dl>
+<dd><p>configures and returns a Superpacman environment, ready to use.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>env_batch_size</strong> – the number of environments N to run in parallel</p></li>
+<li><p><strong>obs_keys</strong> – a string or list of strings.. valid values are
+“image” =&gt; adds a (N, 9, 21, 21) tensor to the state tensordict in key [‘image’]
+“ego_image” =&gt; adds a (N, 9, ego_patch_radius * 2 + 1, ego_patch_radius * 2 + 1) tensor centered on pacman in key[‘ego_image’]
+“pixels” =&gt; adds a (N, 3, 21, 21) RGB image in key [‘pixels’]
+“ego_pixels” -&gt; add a (N, 3, ego_patch_radius * 2 + 1, ego_patch_radius * 2 + 1) tensor centered on pacman in key[‘ego_pixels’]</p></li>
+<li><p><strong>device</strong> – device to use, “cuda” or “cpu”</p></li>
+<li><p><strong>ego_patch_radius</strong> – if “ego_image” or “ego_pixels”, then this set the visible radius around pacman</p></li>
+<li><p><strong>log_video</strong> – if true, the environment will enable logging RGB video to log…
+&gt;&gt;&gt; env = make_env(9, log_video=True)
+&gt;&gt;&gt; env.rollout(100)
+&gt;&gt;&gt; env.recorder.dump(“hello”)
+by default logs will be created in logs/superpacman/videos/pacman_hello_0.mp4
+set a logger to control where the logs will be set
+# note… logging video will increase memory utilization, so don’t use it in the training loop unless debugging</p></li>
+<li><p><strong>log_stats</strong> – adds [‘step_count’] and [‘episode_reward’] to the state dict, step_count being the total number</p></li>
+<li><p><strong>far</strong> (<em>of steps on the trajectory.. episode_reward is set to the sum</em><em> of </em><em>reward recieved so</em>)</p></li>
+<li><p><strong>eg</strong> (<em>Make sure you use the &quot;next&quot; key to get episode_reward</em>)</p></li>
+<li><p><strong>make_env</strong> (<em>&gt;&gt;&gt; env =</em>)</p></li>
+<li><p><strong>env.rollout</strong> (<em>&gt;&gt;&gt; state =</em>)</p></li>
+<li><p><strong>state</strong><strong>[</strong><strong>0</strong><strong>]</strong><strong>[</strong><strong>-1</strong><strong>]</strong><strong>[</strong><strong>'next'</strong> (<em>&gt;&gt;&gt;</em>)</p></li>
+<li><p><strong>'episode_reward'</strong><strong>]</strong></p></li>
+<li><p><strong>seed</strong> – random seed to use.. default None</p></li>
+<li><p><strong>logger</strong></p></li>
+<li><p><strong>max_steps</strong></p></li>
+</ul>
+</dd>
+</dl>
+<p>Returns:</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="superpacman.superpacman.pos_to_grid">
@@ -459,7 +492,7 @@ rewards: The amount of reward for entering the tile.</p>
 <span id="superpacman-train-ppo-module"></span><h2>superpacman.train_ppo module<a class="headerlink" href="#module-superpacman.train_ppo" title="Link to this heading"></a></h2>
 <dl class="py class">
 <dt class="sig sig-object py" id="superpacman.train_ppo.Policy">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">superpacman.train_ppo.</span></span><span class="sig-name descname"><span class="pre">Policy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_channels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actions_n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batchnorm_momentum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/train_ppo.html#Policy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.train_ppo.Policy" title="Link to this definition"></a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">superpacman.train_ppo.</span></span><span class="sig-name descname"><span class="pre">Policy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_channels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actions_n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batchnorm_momentum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/train_ppo.html#Policy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.train_ppo.Policy" title="Link to this definition"></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
 <p>Policy network for flat observation</p>
 <dl class="py method">
@@ -480,7 +513,7 @@ registered hooks while the latter silently ignores them.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="superpacman.train_ppo.VGGConvBlock">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">superpacman.train_ppo.</span></span><span class="sig-name descname"><span class="pre">VGGConvBlock</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_channels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batchnorm_momentum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/train_ppo.html#VGGConvBlock"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.train_ppo.VGGConvBlock" title="Link to this definition"></a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">superpacman.train_ppo.</span></span><span class="sig-name descname"><span class="pre">VGGConvBlock</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_channels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batchnorm_momentum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/train_ppo.html#VGGConvBlock"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.train_ppo.VGGConvBlock" title="Link to this definition"></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
 <dl class="py method">
 <dt class="sig sig-object py" id="superpacman.train_ppo.VGGConvBlock.forward">
@@ -500,7 +533,7 @@ registered hooks while the latter silently ignores them.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="superpacman.train_ppo.Value">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">superpacman.train_ppo.</span></span><span class="sig-name descname"><span class="pre">Value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_channels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batchnorm_momentum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/train_ppo.html#Value"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.train_ppo.Value" title="Link to this definition"></a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">superpacman.train_ppo.</span></span><span class="sig-name descname"><span class="pre">Value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_channels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batchnorm_momentum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/train_ppo.html#Value"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.train_ppo.Value" title="Link to this definition"></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
 <p>MLP value function</p>
 <dl class="py method">
