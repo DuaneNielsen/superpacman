@@ -314,7 +314,7 @@ def train(args):
             with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
                 pbar.set_description('starting eval rollout')
                 eval_rollout = eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
-                evan_reward_mean, reward_max, _ = log_episode_stats(eval_rollout, "episode_reward")
+                eval_reward_mean, reward_max, _ = log_episode_stats(eval_rollout, "episode_reward")
                 step_count_mean, step_count_max, _ = log_episode_stats(eval_rollout, "step_count")
                 pbar.set_description('computing stats')
                 advantage_module(eval_rollout)
