@@ -6,13 +6,17 @@ import os.path
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 import sys
+import subprocess
 
 sys.path.insert(0, os.path.abspath('..'))
+
+VERSION = subprocess.run(['git', 'describe', '--tags'], stdout=subprocess.PIPE).stdout.decode("utf-8").strip().split('-')[0]
+assert "." in VERSION, f"version {VERSION} does not contain dots"
 
 project = 'superpacman'
 copyright = '2024, Duane Nielsen'
 author = 'Duane Nielsen'
-release = '0.1'
+release = VERSION
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
