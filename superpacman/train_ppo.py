@@ -238,16 +238,16 @@ def train(args):
     if args.load_checkpoint:
         load_checkpoint(args.load_checkpoint)
 
-    def log_episode_stats(tensordict_data, key):
+    def log_episode_stats(tensordict_data, key, prefix):
         terminal_values = tensordict_data['next', key][tensordict_data['next', 'done']].flatten().tolist()
         value_mean, value_max, valu_std = None, None, None
         if len(terminal_values) > 0:
             value_mean, value_max = mean(terminal_values), max(terminal_values)
-            logger.log_scalar(f"{key}_mean", value_mean)
-            logger.log_scalar(f"{key}_max", value_max)
+            logger.log_scalar(f"{prefix}_{key}_mean", value_mean)
+            logger.log_scalar(f"{prefix}_{key}_max", value_max)
         if len(terminal_values) >= 2:
             value_std = stdev(terminal_values)
-            logger.log_scalar(f"{key}_stdv", value_std)
+            logger.log_scalar(f"f{prefix}_{key}_stdv", value_std)
         return value_mean, value_max, valu_std
 
     # ready to start the training loop
@@ -258,8 +258,8 @@ def train(args):
     for i, tensordict_data in enumerate(collector):
         after_collect = time()
         env_time = after_collect - after_update
-        train_reward_mean, train_reward_max, _ = log_episode_stats(tensordict_data, "episode_reward")
-        step_count_mean, step_count_max, _ = log_episode_stats(tensordict_data, "step_count")
+        train_reward_mean, train_reward_max, _ = log_episode_stats(tensordict_data, "episode_reward", "train")
+        step_count_mean, step_count_max, _ = log_episode_stats(tensordict_data, "step_count", "train")
 
         # PPO update
         for _ in range(args.ppo_steps):
