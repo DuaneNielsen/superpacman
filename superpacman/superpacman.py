@@ -18,6 +18,7 @@ from torchrl.envs.transforms.transforms import _apply_to_composite, ObservationT
 from typing import Any, Dict, List, Optional, OrderedDict, Sequence, Tuple, Union
 from enum import IntEnum
 from math import prod
+from kornia.contrib import distance_transform
 
 """
 A minimal stateless vectorized gridworld in pytorch rl
@@ -69,7 +70,7 @@ action_vec = torch.stack(
 
 tile_keys = ['player_tiles', 'wall_tiles', 'reward_tiles', 'energizer_tiles', 'pinky_tiles', 'blinky_tiles',
              'inky_tiles', 'claude_tiles', 'frightened_tiles']
-egocentric_tile_keys = [f'c_{key}' for key in tile_keys]
+egocentric_tile_keys = [f'ego_{key}' for key in tile_keys]
 
 
 def hex_to_rgb(hex_color):
@@ -510,10 +511,10 @@ class SuperPacman(EnvBase):
 
 
 class CenterPlayerTransform(ObservationTransform):
-    def __init__(self, patch_radius=2):
+    def __init__(self, in_keys, out_keys, patch_radius=2):
         super().__init__(
-            in_keys=tile_keys,
-            out_keys=[f'c_{key}' for key in tile_keys])
+            in_keys=in_keys,
+            out_keys=egocentric_tile_keys)
         self.size = patch_radius
 
     def forward(self, tensordict):
@@ -698,11 +699,51 @@ class StackTileTransform(ObservationTransform):
     def transform_observation_spec(self, observation_spec):
         N, H, W = observation_spec.shape
         C = len(self.in_keys)
-        return BoundedTensorSpec(
-            minimum=0,
-            maximum=1,
+        return UnboundedContinuousTensorSpec(
             shape=torch.Size((N, C, H, W)),
             dtype=observation_spec.dtype,
+            device=observation_spec.device
+        )
+
+
+class DistanceTransform(ObservationTransform):
+    """
+    Applies the signed distance transform to a 2d image
+    The image must be binary, meaning only zeroes and ones in the image
+    uses kornia.contrib distance_transform, which returns the manhattan distance
+    """
+    def __init__(self, in_keys, out_keys, normalize=True):
+        """
+
+        Args:
+            in_keys: a list of tensordict keys to transform, (N, H, W)
+            out_keys: a list of keys to write the transforms to (N, H, W)
+        """
+        assert len(in_keys) == len(out_keys), "in_keys and out_keys must be same length"
+        super().__init__(in_keys=in_keys, out_keys=out_keys)
+        self.normalize = normalize
+
+    def forward(self, tensordict):
+        return self._call(tensordict)
+
+    def _reset(self, tensordict, tensordict_reset):
+        return self._call(tensordict_reset)
+
+    def _call(self, td):
+        for in_key, out_key in zip(self.in_keys, self.out_keys):
+            N, H, W = td[in_key].shape
+            distance_map = distance_transform(td[in_key].unsqueeze(1).float()).squeeze(1)
+            if self.normalize:
+                distance_map = 1. - distance_map / (H + W)
+            td[out_key] = distance_map
+        return td
+
+    @_apply_to_composite
+    def transform_observation_spec(self, observation_spec):
+        N, H, W = observation_spec.shape
+        return UnboundedContinuousTensorSpec(
+            shape=torch.Size((N, H, W)),
+            dtype=torch.float32,
             device=observation_spec.device
         )
 
@@ -761,6 +802,9 @@ def make_env(env_batch_size, obs_keys=None, device='cpu',
     obs_keys = [obs_keys] if isinstance(obs_keys, str) else obs_keys
     obs_keys = set(obs_keys)
 
+    signed_tile_keys = [f'distance_{key}' for key in tile_keys]
+    ego_distance_keys = [f'ego_distance_{key}' for key in tile_keys]
+
     if "flat_obs" in obs_keys:
         env.append_transform(FlatTileTransform(tile_keys))
 
@@ -768,15 +812,31 @@ def make_env(env_batch_size, obs_keys=None, device='cpu',
         env.append_transform(StackTileTransform(in_keys=tile_keys))
 
     if "ego_image" in obs_keys:
-        env.append_transform(CenterPlayerTransform(patch_radius=ego_patch_radius))
+        env.append_transform(CenterPlayerTransform(in_keys=tile_keys, out_keys=egocentric_tile_keys, patch_radius=ego_patch_radius))
         env.append_transform(StackTileTransform(in_keys=egocentric_tile_keys, out_key='ego_image'))
+
+    if "flat_distance_obs":
+        env.append_transform(DistanceTransform(tile_keys, signed_tile_keys))
+        env.append_transform(FlatTileTransform(signed_tile_keys, out_key="flat_distance_obs"))
+
+    if "distance_image" in obs_keys:
+        if not has_transform(env, DistanceTransform):
+            env.append_transform(DistanceTransform(tile_keys, signed_tile_keys))
+        env.append_transform(DistanceTransform(tile_keys, signed_tile_keys))
+        env.append_transform(StackTileTransform(in_keys=signed_tile_keys, out_key='distance_image'))
+
+    if "ego_distance_image" in obs_keys:
+        if not has_transform(env, DistanceTransform):
+            env.append_transform(DistanceTransform(tile_keys, signed_tile_keys))
+        env.append_transform(CenterPlayerTransform(in_keys=signed_tile_keys, out_keys=ego_distance_keys, patch_radius=ego_patch_radius))
+        env.append_transform(StackTileTransform(in_keys=ego_distance_keys, out_key='ego_distance_image'))
 
     if "pixels" in obs_keys:
         env.append_transform(RGBFullObsTransform())
 
     if "ego_pixels" in obs_keys:
         if not has_transform(env, CenterPlayerTransform):
-            env.append_transform(CenterPlayerTransform(patch_radius=ego_patch_radius))
+            env.append_transform(CenterPlayerTransform(in_keys=tile_keys, out_keys=egocentric_tile_keys, patch_radius=ego_patch_radius))
         env.append_transform(RGBPartialObsTransform())
 
     if log_video:
