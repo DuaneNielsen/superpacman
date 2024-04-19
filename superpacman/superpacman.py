@@ -514,7 +514,7 @@ class CenterPlayerTransform(ObservationTransform):
     def __init__(self, in_keys, out_keys, patch_radius=2):
         super().__init__(
             in_keys=in_keys,
-            out_keys=egocentric_tile_keys)
+            out_keys=out_keys)
         self.size = patch_radius
 
     def forward(self, tensordict):
@@ -802,7 +802,7 @@ def make_env(env_batch_size, obs_keys=None, device='cpu',
     obs_keys = [obs_keys] if isinstance(obs_keys, str) else obs_keys
     obs_keys = set(obs_keys)
 
-    signed_tile_keys = [f'distance_{key}' for key in tile_keys]
+    distance_tile_keys = [f'distance_{key}' for key in tile_keys]
     ego_distance_keys = [f'ego_distance_{key}' for key in tile_keys]
 
     if "flat_obs" in obs_keys:
@@ -816,19 +816,19 @@ def make_env(env_batch_size, obs_keys=None, device='cpu',
         env.append_transform(StackTileTransform(in_keys=egocentric_tile_keys, out_key='ego_image'))
 
     if "flat_distance_obs":
-        env.append_transform(DistanceTransform(tile_keys, signed_tile_keys))
-        env.append_transform(FlatTileTransform(signed_tile_keys, out_key="flat_distance_obs"))
+        env.append_transform(DistanceTransform(tile_keys, distance_tile_keys))
+        env.append_transform(FlatTileTransform(distance_tile_keys, out_key="flat_distance_obs"))
 
     if "distance_image" in obs_keys:
         if not has_transform(env, DistanceTransform):
-            env.append_transform(DistanceTransform(tile_keys, signed_tile_keys))
-        env.append_transform(DistanceTransform(tile_keys, signed_tile_keys))
-        env.append_transform(StackTileTransform(in_keys=signed_tile_keys, out_key='distance_image'))
+            env.append_transform(DistanceTransform(tile_keys, distance_tile_keys))
+        env.append_transform(DistanceTransform(tile_keys, distance_tile_keys))
+        env.append_transform(StackTileTransform(in_keys=distance_tile_keys, out_key='distance_image'))
 
     if "ego_distance_image" in obs_keys:
         if not has_transform(env, DistanceTransform):
-            env.append_transform(DistanceTransform(tile_keys, signed_tile_keys))
-        env.append_transform(CenterPlayerTransform(in_keys=signed_tile_keys, out_keys=ego_distance_keys, patch_radius=ego_patch_radius))
+            env.append_transform(DistanceTransform(tile_keys, distance_tile_keys))
+        env.append_transform(CenterPlayerTransform(in_keys=distance_tile_keys, out_keys=ego_distance_keys, patch_radius=ego_patch_radius))
         env.append_transform(StackTileTransform(in_keys=ego_distance_keys, out_key='ego_distance_image'))
 
     if "pixels" in obs_keys:

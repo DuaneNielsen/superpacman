@@ -102,7 +102,7 @@ class Policy(nn.Module):
             return log_softmax(self.net(features), dim=-1)
 
 
-IN_KEYS = ['flat_obs', 'ego_image']
+IN_KEYS = ['flat_distance_obs', 'ego_distance_image']
 EGO_PATCH_RADIUS = 4
 
 
@@ -157,8 +157,8 @@ def train(args):
                         max_steps=args.max_steps_per_traj)
 
     # networks
-    in_features = env.observation_spec['flat_obs'].shape[-1]
-    in_channels = env.observation_spec['ego_image'].shape[-3]
+    in_features = env.observation_spec['flat_distance_obs'].shape[-1]
+    in_channels = env.observation_spec['ego_distance_image'].shape[-3]
     actions_n = env.action_spec.n
 
     value_net = Value(in_features=in_features, in_channels=in_channels, hidden_dim=args.hidden_dim)
@@ -357,8 +357,8 @@ def rollout_checkpoint(checkpoint_filename, suffix, logger, device='cpu', seed=4
         eval_env = make_env(32, IN_KEYS, device=device, ego_patch_radius=EGO_PATCH_RADIUS,
                             seed=seed, log_video=True, logger=logger, max_steps=max_steps_per_trajectory)
 
-        in_features = eval_env.observation_spec['flat_obs'].shape[-1]
-        in_channels = eval_env.observation_spec['ego_image'].shape[-3]
+        in_features = eval_env.observation_spec['flat_distance_obs'].shape[-1]
+        in_channels = eval_env.observation_spec['ego_distance_image'].shape[-3]
         actions_n = eval_env.action_spec.n
         chkpt = torch.load(checkpoint_filename)
         hidden_dim = chkpt["hidden_dim"]
