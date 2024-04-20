@@ -511,6 +511,15 @@ class SuperPacman(EnvBase):
 
 class CenterPlayerTransform(ObservationTransform):
     def __init__(self, in_keys, out_keys, patch_radius=2, fill_value=None):
+Docu        """
+        Centers the view on the player location
+
+        Args:
+            in_keys: list of keys in tensordict to center
+            out_keys: key to write the egocentric view in tensordict
+            patch_radius: distance from the players location to include in the view
+            fill_value: if the view goes off the edge.. fill with this value.  Default 0
+        """
         super().__init__(
             in_keys=in_keys,
             out_keys=out_keys)
@@ -546,6 +555,8 @@ class CenterPlayerTransform(ObservationTransform):
             x_index = indexes[:, 0].unsqueeze(1)
             y_index = indexes[:, 1].unsqueeze(1)
             td[out_key] = in_image[batch_range, channel_range, x_index, y_index]
+
+            # mask or fill the tiles that are off the edge
             td[out_key] = td[out_key] * mask.view(N, 1, max_x, max_y)
             if self.fill_value is not None:
                 td[out_key] = td[out_key] + ~mask.view(N, 1, max_x, max_y) * self.fill_value
@@ -850,7 +861,7 @@ def make_env(env_batch_size, obs_keys=None, device='cpu',
             env.append_transform(DistanceTransform("image", "distance_image"))
 
         env.append_transform(CenterPlayerTransform(in_keys="distance_image", out_keys="ego_distance_image",
-                                                   patch_radius=ego_patch_radius))
+                                                   patch_radius=ego_patch_radius, fill_value=1.))
 
     if "pixels" in obs_keys:
         env.append_transform(RGBFullObsTransform())
