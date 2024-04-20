@@ -511,7 +511,7 @@ class SuperPacman(EnvBase):
 
 class CenterPlayerTransform(ObservationTransform):
     def __init__(self, in_keys, out_keys, patch_radius=2, fill_value=None):
-Docu        """
+        """
         Centers the view on the player location
 
         Args:
