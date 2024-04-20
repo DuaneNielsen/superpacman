@@ -224,7 +224,6 @@ def _step(state):
     frightened_tiles = pos_to_grid(next_ghost_pos, H, W, device=device, dtype=dtype)
     frightened_tiles = frightened_tiles * (state['energized_t'] / 8).view(N, 1, 1)
 
-
     # check collisions
     collide = torch.logical_or((ghost_pos == player_pos.view(N, 1, 2)).all(-1),
                                (next_ghost_pos == player_pos.view(N, 1, 2)).all(-1))
@@ -515,7 +514,7 @@ class CenterPlayerTransform(ObservationTransform):
         super().__init__(
             in_keys=in_keys,
             out_keys=out_keys)
-        self.size = patch_radius
+        self.patch_radius = patch_radius
 
     def forward(self, tensordict):
         return self._call(tensordict)
@@ -525,30 +524,48 @@ class CenterPlayerTransform(ObservationTransform):
 
     def _call(self, td):
         for in_key, out_key in zip(self.in_keys, self.out_keys):
-            N, H, W = td[in_key].shape
+            in_image = td[in_key].unsqueeze(1) if len(td[in_key].shape) == 3 else td[in_key]
+            N, C, H, W = in_image.shape
             device = td[in_key].device
-            max_x, max_y = 2 * self.size + 1, 2 * self.size + 1
+            max_x, max_y = 2 * self.patch_radius + 1, 2 * self.patch_radius + 1
 
+            # compute the indices for the partial observation in the source image
             x, y = torch.meshgrid(torch.arange(max_x, device=device), torch.arange(max_y, device=device), indexing='ij')
             grid = torch.stack([x, y], 0).view(1, 2, max_x, max_y)
             player_coords = td['player_pos'].view(N, 2, 1, 1)
-            indexes = player_coords + grid - self.size
-            indexes = indexes % H
-            batch_range = torch.arange(N, device=device)
-            td[out_key] = td[in_key][batch_range.view(N, 1), indexes[:, 0].flatten(-2), indexes[:, 1].flatten(-2)].view(
-                N, max_x, max_y)
+            indexes = player_coords + grid - self.patch_radius
+
+            # mask the ones that are off the edge
+            mask = (-1 < indexes) & (indexes < H)
+            mask = mask[:, 0] & mask[:, 1]
+            indexes = indexes % H  # this ensures we wont index outside the source tensor
+
+            batch_range = torch.arange(N, device=device).view(N, 1)
+            td[out_key] = in_image[batch_range, :, indexes[:, 0].flatten(-2),
+                          indexes[:, 1].flatten(-2)].view(N, C, max_x, max_y)
+            td[out_key] = td[out_key] * mask.view(N, 1, max_x, max_y)
+            if len(td[in_key].shape) == 3:
+                td[out_key] = td[out_key].squeeze(1)
         return td
 
     @_apply_to_composite
     def transform_observation_spec(self, observation_spec):
-        N, H, W = observation_spec.shape
-        return BoundedTensorSpec(
-            minimum=0,
-            maximum=255,
-            shape=torch.Size((N, self.size * 2 + 1, self.size * 2 + 1)),
-            dtype=observation_spec.dtype,
-            device=observation_spec.device
-        )
+        if len(observation_spec.shape) == 3:
+            N, H, W = observation_spec.shape
+            return UnboundedContinuousTensorSpec(
+                shape=torch.Size((N, self.patch_radius * 2 + 1, self.patch_radius * 2 + 1)),
+                dtype=observation_spec.dtype,
+                device=observation_spec.device
+            )
+        elif len(observation_spec.shape) == 4:
+            N, C, H, W = observation_spec.shape
+            return UnboundedContinuousTensorSpec(
+                shape=torch.Size((N, C, self.patch_radius * 2 + 1, self.patch_radius * 2 + 1)),
+                dtype=observation_spec.dtype,
+                device=observation_spec.device
+            )
+        else:
+            assert False, f"expected N, H, W or N, C, H, W image, observation_spec had shape {observation_spec.shape}"
 
 
 class RGBPartialObsTransform(ObservationTransform):
@@ -558,7 +575,7 @@ class RGBPartialObsTransform(ObservationTransform):
     """
 
     def __init__(self):
-        super().__init__(in_keys=['c_wall_tiles'], out_keys=['ego_pixels'])
+        super().__init__(in_keys=['ego_wall_tiles'], out_keys=['ego_pixels'])
 
     def forward(self, tensordict):
         return self._call(tensordict)
@@ -567,22 +584,22 @@ class RGBPartialObsTransform(ObservationTransform):
         return self._call(tensordict_reset)
 
     def _call(self, td):
-        walls = td['c_wall_tiles']
+        walls = td['ego_wall_tiles']
         device = walls.device
         shape = *walls.shape, 3
         center_x, center_y = shape[1] // 2, shape[2] // 2
 
         td['ego_pixels'] = torch.zeros(shape, dtype=torch.uint8, device=device)
-        td['ego_pixels'][td['c_wall_tiles'] == 1] = wall_color.to(device)
-        td['ego_pixels'][td['c_reward_tiles'] > 0] = food.to(device)
-        td['ego_pixels'][td['c_reward_tiles'] < 0] = red.to(device)
-        td['ego_pixels'][td['c_energizer_tiles'] == 1] = energizer_color.to(device)
+        td['ego_pixels'][td['ego_wall_tiles'] == 1] = wall_color.to(device)
+        td['ego_pixels'][td['ego_reward_tiles'] > 0] = food.to(device)
+        td['ego_pixels'][td['ego_reward_tiles'] < 0] = red.to(device)
+        td['ego_pixels'][td['ego_energizer_tiles'] == 1] = energizer_color.to(device)
         td['ego_pixels'][:, center_x, center_y] = yellow.to(device)
-        td['ego_pixels'][td['c_blinky_tiles'] == 1] = blinky_color.to(device)
-        td['ego_pixels'][td['c_pinky_tiles'] == 1] = pinky_color.to(device)
-        td['ego_pixels'][td['c_inky_tiles'] == 1] = inky_color.to(device)
-        td['ego_pixels'][td['c_claude_tiles'] == 1] = claude_color.to(device)
-        td['ego_pixels'][td['c_frightened_tiles'] > 0] = blue.to(device)
+        td['ego_pixels'][td['ego_blinky_tiles'] == 1] = blinky_color.to(device)
+        td['ego_pixels'][td['ego_pinky_tiles'] == 1] = pinky_color.to(device)
+        td['ego_pixels'][td['ego_inky_tiles'] == 1] = inky_color.to(device)
+        td['ego_pixels'][td['ego_claude_tiles'] == 1] = claude_color.to(device)
+        td['ego_pixels'][td['ego_frightened_tiles'] > 0] = blue.to(device)
         return td
 
     @_apply_to_composite
@@ -712,6 +729,7 @@ class DistanceTransform(ObservationTransform):
     The image must be binary, meaning only zeroes and ones in the image
     uses kornia.contrib distance_transform, which returns the manhattan distance
     """
+
     def __init__(self, in_keys, out_keys, normalize=True):
         """
 
@@ -719,6 +737,8 @@ class DistanceTransform(ObservationTransform):
             in_keys: a list of tensordict keys to transform, (N, H, W)
             out_keys: a list of keys to write the transforms to (N, H, W)
         """
+        in_keys = [in_keys] if isinstance(in_keys, str) else in_keys
+        out_keys = [out_keys] if isinstance(out_keys, str) else out_keys
         assert len(in_keys) == len(out_keys), "in_keys and out_keys must be same length"
         super().__init__(in_keys=in_keys, out_keys=out_keys)
         self.normalize = normalize
@@ -731,18 +751,20 @@ class DistanceTransform(ObservationTransform):
 
     def _call(self, td):
         for in_key, out_key in zip(self.in_keys, self.out_keys):
-            N, H, W = td[in_key].shape
-            distance_map = distance_transform(td[in_key].unsqueeze(1).float()).squeeze(1)
+            in_image = td[in_key].unsqueeze(1) if len(td[in_key].shape) == 3 else td[in_key]
+            N, C, H, W = in_image.shape
+            distance_map = distance_transform(in_image.float())
+            distance_map = distance_map.squeeze(1) if len(td[in_key].shape) == 3 else distance_map
             if self.normalize:
                 distance_map = 1. - distance_map / (H + W)
             td[out_key] = distance_map
+
         return td
 
     @_apply_to_composite
     def transform_observation_spec(self, observation_spec):
-        N, H, W = observation_spec.shape
         return UnboundedContinuousTensorSpec(
-            shape=torch.Size((N, H, W)),
+            shape=torch.Size(observation_spec.shape),
             dtype=torch.float32,
             device=observation_spec.device
         )
@@ -757,7 +779,7 @@ def has_transform(env, transform_class):
 
 
 def make_env(env_batch_size, obs_keys=None, device='cpu',
-             ego_patch_radius=10, log_video=False,  log_stats=True, seed=None,
+             ego_patch_radius=10, log_video=False, log_stats=True, seed=None,
              logger=None, max_steps=None):
     """
 
@@ -802,41 +824,30 @@ def make_env(env_batch_size, obs_keys=None, device='cpu',
     obs_keys = [obs_keys] if isinstance(obs_keys, str) else obs_keys
     obs_keys = set(obs_keys)
 
-    distance_tile_keys = [f'distance_{key}' for key in tile_keys]
-    ego_distance_keys = [f'ego_distance_{key}' for key in tile_keys]
+    env.append_transform(StackTileTransform(in_keys=tile_keys, out_key='image'))
 
     if "flat_obs" in obs_keys:
         env.append_transform(FlatTileTransform(tile_keys))
 
-    if "image" in obs_keys:
-        env.append_transform(StackTileTransform(in_keys=tile_keys))
-
     if "ego_image" in obs_keys:
-        env.append_transform(CenterPlayerTransform(in_keys=tile_keys, out_keys=egocentric_tile_keys, patch_radius=ego_patch_radius))
-        env.append_transform(StackTileTransform(in_keys=egocentric_tile_keys, out_key='ego_image'))
-
-    if "flat_distance_obs":
-        env.append_transform(DistanceTransform(tile_keys, distance_tile_keys))
-        env.append_transform(FlatTileTransform(distance_tile_keys, out_key="flat_distance_obs"))
+        env.append_transform(CenterPlayerTransform(in_keys=['image'],
+                                                   out_keys=['ego_image'], patch_radius=ego_patch_radius))
 
     if "distance_image" in obs_keys:
-        if not has_transform(env, DistanceTransform):
-            env.append_transform(DistanceTransform(tile_keys, distance_tile_keys))
-        env.append_transform(DistanceTransform(tile_keys, distance_tile_keys))
-        env.append_transform(StackTileTransform(in_keys=distance_tile_keys, out_key='distance_image'))
+        env.append_transform(DistanceTransform("image","distance_image"))
 
     if "ego_distance_image" in obs_keys:
-        if not has_transform(env, DistanceTransform):
-            env.append_transform(DistanceTransform(tile_keys, distance_tile_keys))
-        env.append_transform(CenterPlayerTransform(in_keys=distance_tile_keys, out_keys=ego_distance_keys, patch_radius=ego_patch_radius))
-        env.append_transform(StackTileTransform(in_keys=ego_distance_keys, out_key='ego_distance_image'))
+        if "distance_Image" not in obs_keys:
+            env.append_transform(DistanceTransform("image", "distance_image"))
+
+        env.append_transform(CenterPlayerTransform(in_keys="distance_image", out_keys="ego_distance_image",
+                                                   patch_radius=ego_patch_radius))
 
     if "pixels" in obs_keys:
         env.append_transform(RGBFullObsTransform())
 
     if "ego_pixels" in obs_keys:
-        if not has_transform(env, CenterPlayerTransform):
-            env.append_transform(CenterPlayerTransform(in_keys=tile_keys, out_keys=egocentric_tile_keys, patch_radius=ego_patch_radius))
+        env.append_transform(CenterPlayerTransform(in_keys=tile_keys, out_keys=egocentric_tile_keys, patch_radius=ego_patch_radius))
         env.append_transform(RGBPartialObsTransform())
 
     if log_video:
@@ -859,4 +870,3 @@ def make_env(env_batch_size, obs_keys=None, device='cpu',
         env.set_seed(seed)
 
     return env
-
