@@ -510,11 +510,12 @@ class SuperPacman(EnvBase):
 
 
 class CenterPlayerTransform(ObservationTransform):
-    def __init__(self, in_keys, out_keys, patch_radius=2):
+    def __init__(self, in_keys, out_keys, patch_radius=2, fill_value=None):
         super().__init__(
             in_keys=in_keys,
             out_keys=out_keys)
         self.patch_radius = patch_radius
+        self.fill_value = fill_value
 
     def forward(self, tensordict):
         return self._call(tensordict)
@@ -540,10 +541,15 @@ class CenterPlayerTransform(ObservationTransform):
             mask = mask[:, 0] & mask[:, 1]
             indexes = indexes % H  # this ensures we wont index outside the source tensor
 
-            batch_range = torch.arange(N, device=device).view(N, 1)
-            td[out_key] = in_image[batch_range, :, indexes[:, 0].flatten(-2),
-                          indexes[:, 1].flatten(-2)].view(N, C, max_x, max_y)
+            batch_range = torch.arange(N, device=device).view(N, 1, 1, 1)
+            channel_range = torch.arange(C, device=device).view(1, C, 1, 1)
+            x_index = indexes[:, 0].unsqueeze(1)
+            y_index = indexes[:, 1].unsqueeze(1)
+            td[out_key] = in_image[batch_range, channel_range, x_index, y_index]
             td[out_key] = td[out_key] * mask.view(N, 1, max_x, max_y)
+            if self.fill_value is not None:
+                td[out_key] = td[out_key] + ~mask.view(N, 1, max_x, max_y) * self.fill_value
+
             if len(td[in_key].shape) == 3:
                 td[out_key] = td[out_key].squeeze(1)
         return td
@@ -725,23 +731,26 @@ class StackTileTransform(ObservationTransform):
 
 class DistanceTransform(ObservationTransform):
     """
-    Applies the signed distance transform to a 2d image
+    manhattan distance transform from a 2d image
     The image must be binary, meaning only zeroes and ones in the image
     uses kornia.contrib distance_transform, which returns the manhattan distance
     """
 
-    def __init__(self, in_keys, out_keys, normalize=True):
+    def __init__(self, in_keys, out_keys, normalize=True, h=0.35):
         """
 
         Args:
             in_keys: a list of tensordict keys to transform, (N, H, W)
             out_keys: a list of keys to write the transforms to (N, H, W)
+            normalize: normalizes by 1 - dividing by max_distance, Default: True
+            h: value that influence the approximation of the min function. Default: 0.35
         """
         in_keys = [in_keys] if isinstance(in_keys, str) else in_keys
         out_keys = [out_keys] if isinstance(out_keys, str) else out_keys
         assert len(in_keys) == len(out_keys), "in_keys and out_keys must be same length"
         super().__init__(in_keys=in_keys, out_keys=out_keys)
         self.normalize = normalize
+        self.h = h
 
     def forward(self, tensordict):
         return self._call(tensordict)
@@ -753,10 +762,10 @@ class DistanceTransform(ObservationTransform):
         for in_key, out_key in zip(self.in_keys, self.out_keys):
             in_image = td[in_key].unsqueeze(1) if len(td[in_key].shape) == 3 else td[in_key]
             N, C, H, W = in_image.shape
-            distance_map = distance_transform(in_image.float())
+            distance_map = distance_transform(in_image.float(), h=self.h)
             distance_map = distance_map.squeeze(1) if len(td[in_key].shape) == 3 else distance_map
             if self.normalize:
-                distance_map = 1. - distance_map / (H + W)
+                distance_map = distance_map / (H + W)
             td[out_key] = distance_map
 
         return td
@@ -837,7 +846,7 @@ def make_env(env_batch_size, obs_keys=None, device='cpu',
         env.append_transform(DistanceTransform("image","distance_image"))
 
     if "ego_distance_image" in obs_keys:
-        if "distance_Image" not in obs_keys:
+        if "distance_image" not in obs_keys:
             env.append_transform(DistanceTransform("image", "distance_image"))
 
         env.append_transform(CenterPlayerTransform(in_keys="distance_image", out_keys="ego_distance_image",
