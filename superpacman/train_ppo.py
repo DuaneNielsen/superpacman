@@ -347,19 +347,19 @@ def train(args):
 
     best_chkpt, best_reward = best_checkpt(f'checkpoints/{exp_name}')
     if best_chkpt is not None:
-        rollout_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}', logger=logger, device=args.device,
+        rollout_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}', logger=logger, device="cpu",
                            seed=args.seed, len=args.eval_len)
 
 
 def rollout_checkpoint(checkpoint_filename, suffix, logger, device='cpu', seed=42, len=400, max_steps_per_trajectory=None):
     with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
 
-        eval_env = make_env(32, IN_KEYS, device=device, ego_patch_radius=EGO_PATCH_RADIUS,
+        recording_env = make_env(32, IN_KEYS, device=device, ego_patch_radius=EGO_PATCH_RADIUS,
                             seed=seed, log_video=True, logger=logger, max_steps=max_steps_per_trajectory)
 
-        in_features = eval_env.observation_spec['flat_obs'].shape[-1]
-        in_channels = eval_env.observation_spec['ego_image'].shape[-3]
-        actions_n = eval_env.action_spec.n
+        in_features = recording_env.observation_spec['flat_obs'].shape[-1]
+        in_channels = recording_env.observation_spec['ego_image'].shape[-3]
+        actions_n = recording_env.action_spec.n
         chkpt = torch.load(checkpoint_filename)
         hidden_dim = chkpt["hidden_dim"]
         policy_net = Policy(in_features=in_features, in_channels=in_channels, hidden_dim=hidden_dim, actions_n=actions_n)
@@ -367,14 +367,14 @@ def rollout_checkpoint(checkpoint_filename, suffix, logger, device='cpu', seed=4
         policy_module = make_policy_module(policy_net, IN_KEYS, device)
 
         print(f"rolling out policy {suffix}")
-        eval_env.rollout(len, policy_module, break_when_any_done=False)
+        recording_env.rollout(len, policy_module, break_when_any_done=False)
 
         print(f"logging video to {logger.log_dir}/{logger.exp_name}")
-        eval_env.video_recorder.dump(suffix=suffix)
+        recording_env.video_recorder.dump(suffix=suffix)
 
 
 def enjoy_checkpoint(args):
     filename = Path(args.checkpoint).name
     logger = CSVLogger(filename, './enjoy', video_format='mp4', video_fps=3)
-    rollout_checkpoint(args.checkpoint, suffix=filename, device=args.device, logger=logger, seed=args.seed,
+    rollout_checkpoint(args.checkpoint, suffix=filename, device="cpu", logger=logger, seed=args.seed,
                        len=args.length, max_steps_per_trajectory=args.max_steps_per_traj)
