@@ -27,14 +27,15 @@ class VGGConvBlock(nn.Module):
     def __init__(self, in_channels, batchnorm_momentum=0.1):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Conv2d(in_channels=in_channels, out_channels=128, stride=1, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=in_channels, out_channels=128, stride=1, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(128, momentum=batchnorm_momentum, track_running_stats=False),
             nn.SELU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(256, momentum=batchnorm_momentum, track_running_stats=False),
             nn.SELU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2)
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(in_channels=256, out_channels=256, stride=1, kernel_size=1, bias=False),
         )
 
     def forward(self, image):
@@ -255,100 +256,122 @@ def train(args):
     train_reward_mean, train_reward_max, eval_reward_mean = 0., 0., 0.
     after_update = time()
 
-    for i, tensordict_data in enumerate(collector):
-        after_collect = time()
-        env_time = after_collect - after_update
-        train_reward_mean, train_reward_max, _ = log_episode_stats(tensordict_data, "episode_reward", "train")
-        step_count_mean, step_count_max, _ = log_episode_stats(tensordict_data, "step_count", "train")
+    def trace_handler(p):
+        output = p.key_averages(group_by_stack_n=5).table(sort_by="self_cuda_memory_usage", row_limit=20)
+        print(output)
+        p.export_chrome_trace("./trace_" + str(p.step_num) + ".json")
 
-        # PPO update
-        for _ in range(args.ppo_steps):
-            advantage_module(tensordict_data)
-            loss_vals = loss_module(tensordict_data)
-            loss_value = (loss_vals["loss_objective"] + loss_vals["loss_critic"] + loss_vals["loss_entropy"])
-            loss_value.backward()
-            torch.nn.utils.clip_grad_norm_(loss_module.parameters(), args.max_grad_norm)
-            optim.step()
-            optim.zero_grad()
+    from torch.profiler import profile, ProfilerActivity
 
-        scheduler.step()
-        after_update = time()
-        update_time = after_update - after_collect
+    with profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            schedule=torch.profiler.schedule(
+                wait=1,
+                warmup=1,
+                active=2),
+            on_trace_ready=trace_handler,
+            profile_memory=True,
+            with_stack=True,
+            experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True)
+    ) as p:
 
-        # and now for the logging
-        def training_stats(state_dict, loss_value, prefix=None):
+        with torch.autograd.profiler.record_function("collecting"):
+            for i, tensordict_data in enumerate(collector):
+                with torch.autograd.profiler.record_function("training"):
+                    after_collect = time()
+                    env_time = after_collect - after_update
+                    train_reward_mean, train_reward_max, _ = log_episode_stats(tensordict_data, "episode_reward", "train")
+                    step_count_mean, step_count_max, _ = log_episode_stats(tensordict_data, "step_count", "train")
 
-            with torch.no_grad():
-                prefix = '' if prefix is None else f"{prefix}_"
-                state_value = state_dict['state_value']
-                entropy = loss_value['entropy']
+                    # PPO update
+                    for _ in range(args.ppo_steps):
+                        advantage_module(tensordict_data)
+                        loss_vals = loss_module(tensordict_data)
+                        loss_value = (loss_vals["loss_objective"] + loss_vals["loss_critic"] + loss_vals["loss_entropy"])
+                        loss_value.backward()
+                        torch.nn.utils.clip_grad_norm_(loss_module.parameters(), args.max_grad_norm)
+                        optim.step()
+                        optim.zero_grad()
 
-                return {
-                    f"{prefix}state_value_max": state_value.max().item(),
-                    f"{prefix}state_value_mean": state_value.mean().item(),
-                    f"{prefix}state_value_min": state_value.min().item(),
-                    f"{prefix}policy_entropy_value_max": entropy.max().item(),
-                    f"{prefix}policy_entropy_value_mean": entropy.mean().item(),
-                    f"{prefix}policy_entropy_value_min": entropy.min().item(),
-                }
+                    scheduler.step()
+                    after_update = time()
+                    update_time = after_update - after_collect
+                    p.step()
 
-        if i % 10 == 0:
+                    # and now for the logging
+                    def training_stats(state_dict, loss_value, prefix=None):
 
-            epi_stats = training_stats(tensordict_data, loss_vals, 'train')
-            train_stats = {
-                "train_learning rate": scheduler.get_last_lr()[0],
-                "train_env_time": env_time,
-                "train_update_time": update_time,
-            }
-            stats = {**epi_stats, **train_stats}
-            for name, value in stats.items():
-                logger.log_scalar(name, value, step=i)
+                        with torch.no_grad():
+                            prefix = '' if prefix is None else f"{prefix}_"
+                            state_value = state_dict['state_value']
+                            entropy = loss_value['entropy']
 
-        if train_reward_mean is not None and eval_reward_mean is not None:
-            pbar.set_description(
-                f'train reward mean/max {train_reward_mean:.2f}/{train_reward_max:.2f} eval reward mean: {eval_reward_mean:.2f}')
-            pbar.update(tensordict_data.numel())
+                            return {
+                                f"{prefix}state_value_max": state_value.max().item(),
+                                f"{prefix}state_value_mean": state_value.mean().item(),
+                                f"{prefix}state_value_min": state_value.min().item(),
+                                f"{prefix}policy_entropy_value_max": entropy.max().item(),
+                                f"{prefix}policy_entropy_value_mean": entropy.mean().item(),
+                                f"{prefix}policy_entropy_value_min": entropy.min().item(),
+                            }
 
-        # evaluation
-        if i % args.eval_freq == 0:
-            with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
-                pbar.set_description('starting eval rollout')
-                eval_rollout = eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
-                eval_reward_mean, reward_max, _ = log_episode_stats(eval_rollout, "episode_reward", "eval")
-                step_count_mean, step_count_max, _ = log_episode_stats(eval_rollout, "step_count", "eval")
-                pbar.set_description('computing stats')
-                advantage_module(eval_rollout)
-                loss = loss_module(eval_rollout)
-                epi_stats = training_stats(eval_rollout, loss, prefix='eval')
-                for name, value in epi_stats.items():
-                    logger.log_scalar(name, value, step=i)
+                    if i % 10 == 0:
 
-                if eval_reward_mean is not None:
-                    pbar.set_description(f'saving checkpoint {eval_reward_mean:.2f}')
-                    save_checkpoint(f'checkpoints/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
+                        epi_stats = training_stats(tensordict_data, loss_vals, 'train')
+                        train_stats = {
+                            "train_learning rate": scheduler.get_last_lr()[0],
+                            "train_env_time": env_time,
+                            "train_update_time": update_time,
+                        }
+                        stats = {**epi_stats, **train_stats}
+                        for name, value in stats.items():
+                            logger.log_scalar(name, value, step=i)
 
-    pbar.close()
+                    if train_reward_mean is not None and eval_reward_mean is not None:
+                        pbar.set_description(
+                            f'train reward mean/max {train_reward_mean:.2f}/{train_reward_max:.2f} eval reward mean: {eval_reward_mean:.2f}')
+                        pbar.update(tensordict_data.numel())
 
-    # once training is done, write a video of the best policy we found
-    def best_checkpt(directory):
-        best_rew = -inf
-        best_chkpt = None
-        for chkp in Path(directory).glob('*.pt'):
-            reward_str = chkp.name.split('_')[-1][:-3]
-            try:
-                rew = float(reward_str)
-                if rew > best_rew:
-                    best_rew = rew
-                    best_chkpt = str(chkp)
-            except ValueError:
-                warn(f'{reward_str} is not a valid float')
+                    # evaluation
+                    if i % args.eval_freq == 0:
+                        with set_exploration_type(ExplorationType.RANDOM), torch.no_grad():
+                            pbar.set_description('starting eval rollout')
+                            eval_rollout = eval_env.rollout(args.eval_len, policy_module, break_when_any_done=False)
+                            eval_reward_mean, reward_max, _ = log_episode_stats(eval_rollout, "episode_reward", "eval")
+                            step_count_mean, step_count_max, _ = log_episode_stats(eval_rollout, "step_count", "eval")
+                            pbar.set_description('computing stats')
+                            advantage_module(eval_rollout)
+                            loss = loss_module(eval_rollout)
+                            epi_stats = training_stats(eval_rollout, loss, prefix='eval')
+                            for name, value in epi_stats.items():
+                                logger.log_scalar(name, value, step=i)
 
-        return best_chkpt, best_rew
+                            if eval_reward_mean is not None:
+                                pbar.set_description(f'saving checkpoint {eval_reward_mean:.2f}')
+                                save_checkpoint(f'checkpoints/{exp_name}/checkpoint_{i // args.eval_freq}_{eval_reward_mean:.2f}.pt')
 
-    best_chkpt, best_reward = best_checkpt(f'checkpoints/{exp_name}')
-    if best_chkpt is not None:
-        rollout_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}', logger=logger, device="cpu",
-                           seed=args.seed, len=args.eval_len)
+                pbar.close()
+
+            # once training is done, write a video of the best policy we found
+            def best_checkpt(directory):
+                best_rew = -inf
+                best_chkpt = None
+                for chkp in Path(directory).glob('*.pt'):
+                    reward_str = chkp.name.split('_')[-1][:-3]
+                    try:
+                        rew = float(reward_str)
+                        if rew > best_rew:
+                            best_rew = rew
+                            best_chkpt = str(chkp)
+                    except ValueError:
+                        warn(f'{reward_str} is not a valid float')
+
+                return best_chkpt, best_rew
+
+            best_chkpt, best_reward = best_checkpt(f'checkpoints/{exp_name}')
+            if best_chkpt is not None:
+                rollout_checkpoint(best_chkpt, suffix=f'eval_{best_reward:.2f}', logger=logger, device="cpu",
+                                   seed=args.seed, len=args.eval_len)
 
 
 def rollout_checkpoint(checkpoint_filename, suffix, logger, device='cpu', seed=42, len=400, max_steps_per_trajectory=None):
