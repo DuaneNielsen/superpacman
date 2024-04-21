@@ -27,11 +27,11 @@ class VGGConvBlock(nn.Module):
     def __init__(self, in_channels, batchnorm_momentum=0.1):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Conv2d(in_channels=in_channels, out_channels=128, stride=1, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(in_channels=in_channels, out_channels=128, stride=1, kernel_size=3, padding=1),
             nn.BatchNorm2d(128, momentum=batchnorm_momentum, track_running_stats=False),
             nn.SELU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1),
             nn.BatchNorm2d(256, momentum=batchnorm_momentum, track_running_stats=False),
             nn.SELU(inplace=True),
         )
