@@ -34,6 +34,7 @@ class VGGConvBlock(nn.Module):
             nn.Conv2d(in_channels=128, out_channels=256, stride=1, kernel_size=3, padding=1),
             nn.BatchNorm2d(256, momentum=batchnorm_momentum, track_running_stats=False),
             nn.SELU(inplace=True),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=2, stride=2, bias=False),
         )
 
     def forward(self, image):
@@ -55,7 +56,7 @@ class Value(nn.Module):
     def __init__(self, in_features, in_channels, hidden_dim, batchnorm_momentum=0.1):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(in_features=in_features + 1024*4, out_features=hidden_dim),
+            nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=1, bias=False)
@@ -82,7 +83,7 @@ class Policy(nn.Module):
     def __init__(self, in_features, in_channels, hidden_dim, actions_n, batchnorm_momentum=0.1):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(in_features=in_features + 1024*4, out_features=hidden_dim),
+            nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
