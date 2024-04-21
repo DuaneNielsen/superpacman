@@ -53,19 +53,19 @@ class Value(nn.Module):
     MLP value function
     """
 
-    def __init__(self, in_features, in_channels, hidden_dim, batchnorm_momentum=0.1):
+    def __init__(self, in_channels, hidden_dim, batchnorm_momentum=0.1):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
+            nn.Linear(1024, out_features=hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=1, bias=False)
         )
         self.convblock = VGGConvBlock(in_channels, batchnorm_momentum=batchnorm_momentum)
 
-    def forward(self, flat_obs, image):
+    def forward(self, image):
         conv_values = self.convblock(image)
-        features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
+        features = conv_values.flatten(-3)
         shape = features.shape
         if len(shape) == 3:
             features = features.flatten(0, 1)
@@ -80,19 +80,19 @@ class Policy(nn.Module):
     Policy network for flat observation
     """
 
-    def __init__(self, in_features, in_channels, hidden_dim, actions_n, batchnorm_momentum=0.1):
+    def __init__(self, in_channels, hidden_dim, actions_n, batchnorm_momentum=0.1):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(in_features=in_features + 1024, out_features=hidden_dim),
+            nn.Linear(in_features=1024, out_features=hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.ReLU(),
             nn.Linear(in_features=hidden_dim, out_features=actions_n, bias=False)
         )
         self.convblock = VGGConvBlock(in_channels, batchnorm_momentum=batchnorm_momentum)
 
-    def forward(self, flat_obs, image):
+    def forward(self, image):
         conv_values = self.convblock(image)
-        features = torch.cat([flat_obs, conv_values.flatten(-3)], dim=-1)
+        features = conv_values.flatten(-3)
         shape = features.shape
         if len(shape) == 3:
             features = features.flatten(0, 1)
@@ -102,7 +102,7 @@ class Policy(nn.Module):
             return log_softmax(self.net(features), dim=-1)
 
 
-IN_KEYS = ['flat_obs', 'ego_distance_image']
+IN_KEYS = ['ego_distance_image']
 EGO_PATCH_RADIUS = 4
 
 
@@ -157,12 +157,12 @@ def train(args):
                         max_steps=args.max_steps_per_traj)
 
     # networks
-    in_features = env.observation_spec['flat_obs'].shape[-1]
+    # in_features = env.observation_spec['flat_obs'].shape[-1]
     in_channels = env.observation_spec['ego_distance_image'].shape[-3]
     actions_n = env.action_spec.n
 
-    value_net = Value(in_features=in_features, in_channels=in_channels, hidden_dim=args.hidden_dim)
-    policy_net = Policy(in_features=in_features, in_channels=in_channels, hidden_dim=args.hidden_dim, actions_n=actions_n)
+    value_net = Value(in_channels=in_channels, hidden_dim=args.hidden_dim)
+    policy_net = Policy(in_channels=in_channels, hidden_dim=args.hidden_dim, actions_n=actions_n)
 
     value_params = sum(p.numel() for p in value_net.parameters() if p.requires_grad)
     policy_params = sum(p.numel() for p in value_net.parameters() if p.requires_grad)
@@ -357,12 +357,12 @@ def rollout_checkpoint(checkpoint_filename, suffix, logger, device='cpu', seed=4
         eval_env = make_env(32, IN_KEYS, device=device, ego_patch_radius=EGO_PATCH_RADIUS,
                             seed=seed, log_video=True, logger=logger, max_steps=max_steps_per_trajectory)
 
-        in_features = eval_env.observation_spec['flat_obs'].shape[-1]
+        # in_features = eval_env.observation_spec['flat_obs'].shape[-1]
         in_channels = eval_env.observation_spec['ego_distance_image'].shape[-3]
         actions_n = eval_env.action_spec.n
         chkpt = torch.load(checkpoint_filename)
         hidden_dim = chkpt["hidden_dim"]
-        policy_net = Policy(in_features=in_features, in_channels=in_channels, hidden_dim=hidden_dim, actions_n=actions_n)
+        policy_net = Policy(in_channels=in_channels, hidden_dim=hidden_dim, actions_n=actions_n)
         policy_net.load_state_dict(chkpt["policy_net_state_dict"])
         policy_module = make_policy_module(policy_net, IN_KEYS, device)
 
