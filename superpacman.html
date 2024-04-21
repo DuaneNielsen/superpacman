@@ -59,6 +59,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#module-superpacman.superpacman">superpacman.superpacman module</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#superpacman.superpacman.Actions"><code class="docutils literal notranslate"><span class="pre">Actions</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#superpacman.superpacman.CenterPlayerTransform"><code class="docutils literal notranslate"><span class="pre">CenterPlayerTransform</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#superpacman.superpacman.DistanceTransform"><code class="docutils literal notranslate"><span class="pre">DistanceTransform</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#superpacman.superpacman.FlatTileTransform"><code class="docutils literal notranslate"><span class="pre">FlatTileTransform</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#superpacman.superpacman.Ghost"><code class="docutils literal notranslate"><span class="pre">Ghost</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#superpacman.superpacman.GhostMode"><code class="docutils literal notranslate"><span class="pre">GhostMode</span></code></a></li>
@@ -167,7 +168,7 @@
 
 <dl class="py class">
 <dt class="sig sig-object py" id="superpacman.superpacman.CenterPlayerTransform">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">superpacman.superpacman.</span></span><span class="sig-name descname"><span class="pre">CenterPlayerTransform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">patch_radius</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/superpacman.html#CenterPlayerTransform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.superpacman.CenterPlayerTransform" title="Link to this definition"></a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">superpacman.superpacman.</span></span><span class="sig-name descname"><span class="pre">CenterPlayerTransform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_keys</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_keys</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patch_radius</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fill_value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/superpacman.html#CenterPlayerTransform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.superpacman.CenterPlayerTransform" title="Link to this definition"></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">ObservationTransform</span></code></p>
 <dl class="py method">
 <dt class="sig sig-object py" id="superpacman.superpacman.CenterPlayerTransform.forward">
@@ -178,6 +179,35 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="superpacman.superpacman.CenterPlayerTransform.transform_observation_spec">
 <span class="sig-name descname"><span class="pre">transform_observation_spec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">observation_spec</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/superpacman.html#CenterPlayerTransform.transform_observation_spec"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.superpacman.CenterPlayerTransform.transform_observation_spec" title="Link to this definition"></a></dt>
+<dd><p>Transforms the observation spec such that the resulting spec matches transform mapping.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>observation_spec</strong> (<em>TensorSpec</em>) – spec before the transform</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>expected spec after the transform</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="superpacman.superpacman.DistanceTransform">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">superpacman.superpacman.</span></span><span class="sig-name descname"><span class="pre">DistanceTransform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_keys</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_keys</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.35</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/superpacman.html#DistanceTransform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.superpacman.DistanceTransform" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">ObservationTransform</span></code></p>
+<p>manhattan distance transform from a 2d image
+The image must be binary, meaning only zeroes and ones in the image
+uses kornia.contrib distance_transform, which returns the manhattan distance</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="superpacman.superpacman.DistanceTransform.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensordict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/superpacman.html#DistanceTransform.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.superpacman.DistanceTransform.forward" title="Link to this definition"></a></dt>
+<dd><p>Reads the input tensordict, and for the selected keys, applies the transform.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="superpacman.superpacman.DistanceTransform.transform_observation_spec">
+<span class="sig-name descname"><span class="pre">transform_observation_spec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">observation_spec</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/superpacman.html#DistanceTransform.transform_observation_spec"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.superpacman.DistanceTransform.transform_observation_spec" title="Link to this definition"></a></dt>
 <dd><p>Transforms the observation spec such that the resulting spec matches transform mapping.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
