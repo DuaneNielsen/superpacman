@@ -49,7 +49,10 @@
 <li class="toctree-l2 current"><a class="current reference internal" href="#">superpacman package</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#submodules">Submodules</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#module-superpacman.commands">superpacman.commands module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#superpacman.commands.command_parser"><code class="docutils literal notranslate"><span class="pre">command_parser()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#superpacman.commands.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#positional-arguments">Positional Arguments</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#Sub-commands">Sub-commands</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#module-superpacman.play">superpacman.play module</a><ul>
@@ -124,10 +127,198 @@
 <section id="module-superpacman.commands">
 <span id="superpacman-commands-module"></span><h2>superpacman.commands module<a class="headerlink" href="#module-superpacman.commands" title="Link to this heading"></a></h2>
 <dl class="py function">
+<dt class="sig sig-object py" id="superpacman.commands.command_parser">
+<span class="sig-prename descclassname"><span class="pre">superpacman.commands.</span></span><span class="sig-name descname"><span class="pre">command_parser</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/commands.html#command_parser"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.commands.command_parser" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="superpacman.commands.main">
 <span class="sig-prename descclassname"><span class="pre">superpacman.commands.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/superpacman/commands.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#superpacman.commands.main" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">usage</span><span class="p">:</span> <span class="n">superpacman_prog</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">{</span><span class="n">play</span><span class="p">,</span><span class="n">train</span><span class="p">,</span><span class="n">enjoy</span><span class="p">}</span> <span class="o">...</span>
+</pre></div>
+</div>
+<section id="positional-arguments">
+<h3>Positional Arguments<a class="headerlink" href="#positional-arguments" title="Link to this heading"></a></h3>
+<dl class="option-list">
+<dt><kbd>command</kbd></dt>
+<dd><p>Possible choices: play, train, enjoy</p>
+</dd>
+</dl>
+</section>
+<section id="Sub-commands">
+<h3>Sub-commands<a class="headerlink" href="#Sub-commands" title="Link to this heading"></a></h3>
+<section id="play">
+<h4>play<a class="headerlink" href="#play" title="Link to this heading"></a></h4>
+<p>Run the game</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">superpacman_prog</span> <span class="n">play</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">partial_radius</span> <span class="n">PARTIAL_RADIUS</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments">
+<h5>Named Arguments<a class="headerlink" href="#named-arguments" title="Link to this heading"></a></h5>
+<dl class="option-list">
+<dt><kbd>--partial_radius</kbd></dt>
+<dd><p>distance the agent can see</p>
+<p>Default: 0</p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="train">
+<h4>train<a class="headerlink" href="#train" title="Link to this heading"></a></h4>
+<p>Train the agent</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">superpacman_prog</span> <span class="n">train</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">exp_name</span> <span class="n">EXP_NAME</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">device</span> <span class="n">DEVICE</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">seed</span> <span class="n">SEED</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">env_batch_size</span> <span class="n">ENV_BATCH_SIZE</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">steps_per_batch</span> <span class="n">STEPS_PER_BATCH</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">train_steps</span> <span class="n">TRAIN_STEPS</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">clip_epsilon</span> <span class="n">CLIP_EPSILON</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">gamma</span> <span class="n">GAMMA</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">lmbda</span> <span class="n">LMBDA</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">entropy_eps</span> <span class="n">ENTROPY_EPS</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">max_grad_norm</span> <span class="n">MAX_GRAD_NORM</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">power</span> <span class="n">POWER</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">hidden_dim</span> <span class="n">HIDDEN_DIM</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">max_steps_per_traj</span> <span class="n">MAX_STEPS_PER_TRAJ</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">lr</span> <span class="n">LR</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">lr_sched_step_size</span> <span class="n">LR_SCHED_STEP_SIZE</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">lr_sched_gamma</span> <span class="n">LR_SCHED_GAMMA</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">ppo_steps</span> <span class="n">PPO_STEPS</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">eval_freq</span> <span class="n">EVAL_FREQ</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">eval_len</span> <span class="n">EVAL_LEN</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">logger</span> <span class="p">{</span><span class="n">csv</span><span class="p">,</span><span class="n">wandb</span><span class="p">,</span><span class="n">mlflow</span><span class="p">,</span><span class="n">tensorboard</span><span class="p">}]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">warmup_steps</span> <span class="n">WARMUP_STEPS</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">load_checkpoint</span> <span class="n">LOAD_CHECKPOINT</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments_repeat1">
+<h5>Named Arguments<a class="headerlink" href="#named-arguments_repeat1" title="Link to this heading"></a></h5>
+<dl class="option-list">
+<dt><kbd>--exp_name</kbd></dt>
+<dd><p>experiment name</p>
+<p>Default: “superpacman”</p>
+</dd>
+<dt><kbd>--device</kbd></dt>
+<dd><p>cuda or cpu</p>
+<p>Default: “cpu”</p>
+</dd>
+<dt><kbd>--seed</kbd></dt>
+<dd><p>seed (defaults 42)</p>
+<p>Default: 42</p>
+</dd>
+<dt><kbd>--env_batch_size</kbd></dt>
+<dd><p>number of environments</p>
+<p>Default: 2048</p>
+</dd>
+<dt><kbd>--steps_per_batch</kbd></dt>
+<dd><p>number of steps to take in env per batch</p>
+<p>Default: 8</p>
+</dd>
+<dt><kbd>--train_steps</kbd></dt>
+<dd><p>number of PPO updates to run</p>
+<p>Default: 1000</p>
+</dd>
+<dt><kbd>--clip_epsilon</kbd></dt>
+<dd><p>PPO clipping parameter</p>
+<p>Default: 0.1</p>
+</dd>
+<dt><kbd>--gamma</kbd></dt>
+<dd><p>GAE gamma parameter</p>
+<p>Default: 0.99</p>
+</dd>
+<dt><kbd>--lmbda</kbd></dt>
+<dd><p>GAE lambda parameter</p>
+<p>Default: 0.99</p>
+</dd>
+<dt><kbd>--entropy_eps</kbd></dt>
+<dd><p>policy entropy bonus weight</p>
+<p>Default: 0.08</p>
+</dd>
+<dt><kbd>--max_grad_norm</kbd></dt>
+<dd><p>gradient clipping</p>
+<p>Default: 1.0</p>
+</dd>
+<dt><kbd>--power</kbd></dt>
+<dd><p>power of squeezenet</p>
+<p>Default: 5</p>
+</dd>
+<dt><kbd>--hidden_dim</kbd></dt>
+<dd><p>hidden dim size of MLP</p>
+<p>Default: 64</p>
+</dd>
+<dt><kbd>--max_steps_per_traj</kbd></dt>
+<dd><p>maximum length of a trajectory</p>
+</dd>
+<dt><kbd>--lr</kbd></dt>
+<dd><p>Adam learning rate</p>
+<p>Default: 0.001</p>
+</dd>
+<dt><kbd>--lr_sched_step_size</kbd></dt>
+<dd><p>decay lr after this many steps</p>
+<p>Default: 100000.0</p>
+</dd>
+<dt><kbd>--lr_sched_gamma</kbd></dt>
+<dd><p>decay lr after this many steps</p>
+<p>Default: 0.7</p>
+</dd>
+<dt><kbd>--ppo_steps</kbd></dt>
+<dd><p>number of ppo updates per batch</p>
+<p>Default: 6</p>
+</dd>
+<dt><kbd>--eval_freq</kbd></dt>
+<dd><p>run eval after this many training steps</p>
+<p>Default: 100</p>
+</dd>
+<dt><kbd>--eval_len</kbd></dt>
+<dd><p>run eval after this many training steps</p>
+<p>Default: 400</p>
+</dd>
+<dt><kbd>--logger</kbd></dt>
+<dd><p>Possible choices: csv, wandb, mlflow, tensorboard</p>
+<p>supported loggers</p>
+<p>Default: “csv”</p>
+</dd>
+<dt><kbd>--warmup_steps</kbd></dt>
+<dd><p>delay before starting to learn</p>
+<p>Default: 16</p>
+</dd>
+<dt><kbd>--load_checkpoint</kbd></dt>
+<dd><p>load the checkpoint</p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="enjoy">
+<h4>enjoy<a class="headerlink" href="#enjoy" title="Link to this heading"></a></h4>
+<p>Write a video of the policy in action</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">superpacman_prog</span> <span class="n">enjoy</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">device</span> <span class="n">DEVICE</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">seed</span> <span class="n">SEED</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">length</span> <span class="n">LENGTH</span><span class="p">]</span>
+                       <span class="p">[</span><span class="o">--</span><span class="n">max_steps_per_traj</span> <span class="n">MAX_STEPS_PER_TRAJ</span><span class="p">]</span>
+                       <span class="n">checkpoint</span>
+</pre></div>
+</div>
+<section id="positional-arguments_repeat1">
+<h5>Positional Arguments<a class="headerlink" href="#positional-arguments_repeat1" title="Link to this heading"></a></h5>
+<dl class="option-list">
+<dt><kbd>checkpoint</kbd></dt>
+<dd><p>checkpoint</p>
+</dd>
+</dl>
+</section>
+<section id="named-arguments_repeat2">
+<h5>Named Arguments<a class="headerlink" href="#named-arguments_repeat2" title="Link to this heading"></a></h5>
+<dl class="option-list">
+<dt><kbd>--device</kbd></dt>
+<dd><p>Default: “cpu”</p>
+</dd>
+<dt><kbd>--seed</kbd></dt>
+<dd><p>Default: 42</p>
+</dd>
+<dt><kbd>--length</kbd></dt>
+<dd><p>rollout length</p>
+<p>Default: 400</p>
+</dd>
+<dt><kbd>--max_steps_per_traj</kbd></dt>
+<dd><p>maximum length of a trajectory</p>
+</dd>
+</dl>
+</section>
+</section>
+</section>
 </section>
 <section id="module-superpacman.play">
 <span id="superpacman-play-module"></span><h2>superpacman.play module<a class="headerlink" href="#module-superpacman.play" title="Link to this heading"></a></h2>
