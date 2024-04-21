@@ -3,7 +3,7 @@ from . import train_ppo
 from argparse import ArgumentParser
 
 
-def main():
+def command_parser():
     parser = ArgumentParser()
     subparsers = parser.add_subparsers(dest='command')
 
@@ -46,6 +46,11 @@ def main():
     enjoy_parser.add_argument('--max_steps_per_traj', type=int, default=None, help="maximum length of a trajectory")
     enjoy_parser.set_defaults(func=train_ppo.enjoy_checkpoint)
 
+    return parser
+
+def main():
+
+    parser = command_parser()
     args = parser.parse_args()
 
     if hasattr(args, 'func'):

@@ -12,6 +12,11 @@ superpacman.commands module
    :undoc-members:
    :show-inheritance:
 
+.. argparse::
+   :module: superpacman.commands
+   :func: command_parser
+   :prog: superpacman_prog
+
 superpacman.play module
 -----------------------
 
