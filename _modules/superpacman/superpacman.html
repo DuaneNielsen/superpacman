@@ -1,22 +1,20 @@
+
+
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" data-content_root="../../">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>superpacman.superpacman &mdash; superpacman 0.1.a12 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
-      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
 
   
-  <!--[if lt IE 9]>
-    <script src="../../_static/js/html5shiv.min.js"></script>
-  <![endif]-->
-  
-        <script src="../../_static/jquery.js?v=5d32c60e"></script>
-        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="../../_static/documentation_options.js?v=c3b1149d"></script>
-        <script src="../../_static/doctools.js?v=9a2dae69"></script>
-        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=c3b1149d"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" /> 
@@ -71,13 +69,13 @@
            <div itemprop="articleBody">
              
   <h1>Source code for superpacman.superpacman</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">tensor</span>
-<span class="kn">from</span> <span class="nn">tensordict</span> <span class="kn">import</span> <span class="n">TensorDict</span>
-<span class="kn">from</span> <span class="nn">torchrl.data</span> <span class="kn">import</span> <span class="n">CompositeSpec</span><span class="p">,</span> <span class="n">BoundedTensorSpec</span><span class="p">,</span> <span class="n">UnboundedDiscreteTensorSpec</span><span class="p">,</span> \
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">tensor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tensordict</span><span class="w"> </span><span class="kn">import</span> <span class="n">TensorDict</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchrl.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompositeSpec</span><span class="p">,</span> <span class="n">BoundedTensorSpec</span><span class="p">,</span> <span class="n">UnboundedDiscreteTensorSpec</span><span class="p">,</span> \
     <span class="n">DiscreteTensorSpec</span><span class="p">,</span> \
     <span class="n">UnboundedContinuousTensorSpec</span>
-<span class="kn">from</span> <span class="nn">torchrl.envs</span> <span class="kn">import</span> <span class="p">(</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchrl.envs</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">EnvBase</span><span class="p">,</span>
     <span class="n">StepCounter</span><span class="p">,</span>
     <span class="n">RewardSum</span><span class="p">,</span>
@@ -86,12 +84,12 @@
     <span class="n">ToTensorImage</span><span class="p">,</span>
     <span class="n">PermuteTransform</span>
 <span class="p">)</span>
-<span class="kn">from</span> <span class="nn">torchrl.record</span> <span class="kn">import</span> <span class="n">VideoRecorder</span><span class="p">,</span> <span class="n">CSVLogger</span>
-<span class="kn">from</span> <span class="nn">torchrl.envs.transforms.transforms</span> <span class="kn">import</span> <span class="n">_apply_to_composite</span><span class="p">,</span> <span class="n">ObservationTransform</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">OrderedDict</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
-<span class="kn">from</span> <span class="nn">enum</span> <span class="kn">import</span> <span class="n">IntEnum</span>
-<span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="n">prod</span>
-<span class="kn">from</span> <span class="nn">kornia.contrib</span> <span class="kn">import</span> <span class="n">distance_transform</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchrl.record</span><span class="w"> </span><span class="kn">import</span> <span class="n">VideoRecorder</span><span class="p">,</span> <span class="n">CSVLogger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchrl.envs.transforms.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="n">_apply_to_composite</span><span class="p">,</span> <span class="n">ObservationTransform</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">OrderedDict</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntEnum</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">math</span><span class="w"> </span><span class="kn">import</span> <span class="n">prod</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kornia.contrib</span><span class="w"> </span><span class="kn">import</span> <span class="n">distance_transform</span>
 
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">A minimal stateless vectorized gridworld in pytorch rl</span>
@@ -112,7 +110,7 @@
 
 <div class="viewcode-block" id="Actions">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.Actions">[docs]</a>
-<span class="k">class</span> <span class="nc">Actions</span><span class="p">(</span><span class="n">IntEnum</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Actions</span><span class="p">(</span><span class="n">IntEnum</span><span class="p">):</span>
     <span class="n">N</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="n">E</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
     <span class="n">S</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
@@ -122,7 +120,7 @@
 
 <div class="viewcode-block" id="Ghost">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.Ghost">[docs]</a>
-<span class="k">class</span> <span class="nc">Ghost</span><span class="p">(</span><span class="n">IntEnum</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Ghost</span><span class="p">(</span><span class="n">IntEnum</span><span class="p">):</span>
     <span class="n">BLINKY</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="n">PINKY</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
     <span class="n">INKY</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
@@ -132,7 +130,7 @@
 
 <div class="viewcode-block" id="GhostMode">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.GhostMode">[docs]</a>
-<span class="k">class</span> <span class="nc">GhostMode</span><span class="p">(</span><span class="n">IntEnum</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">GhostMode</span><span class="p">(</span><span class="n">IntEnum</span><span class="p">):</span>
     <span class="n">WAIT</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="n">SCATTER</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
     <span class="n">CHASE</span> <span class="o">=</span> <span class="mi">2</span>
@@ -157,7 +155,7 @@
 
 <div class="viewcode-block" id="hex_to_rgb">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.hex_to_rgb">[docs]</a>
-<span class="k">def</span> <span class="nf">hex_to_rgb</span><span class="p">(</span><span class="n">hex_color</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">hex_to_rgb</span><span class="p">(</span><span class="n">hex_color</span><span class="p">):</span>
     <span class="n">r</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">hex_color</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span> <span class="o">+</span> <span class="mi">2</span><span class="p">],</span> <span class="mi">16</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
     <span class="k">return</span> <span class="n">tensor</span><span class="p">([</span><span class="n">r</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">b</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span></div>
 
@@ -182,7 +180,7 @@
 
 <div class="viewcode-block" id="pos_to_grid">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.pos_to_grid">[docs]</a>
-<span class="k">def</span> <span class="nf">pos_to_grid</span><span class="p">(</span><span class="n">pos</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cpu&#39;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">pos_to_grid</span><span class="p">(</span><span class="n">pos</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cpu&#39;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Converts positions to grid where 1 indicates a position</span>
 <span class="sd">    :param pos: N, ..., 2 tensor of grid positions (x = H, y = W) or 2 tensor</span>
@@ -207,7 +205,7 @@
 
 
 
-<span class="k">def</span> <span class="nf">_step</span><span class="p">(</span><span class="n">state</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_step</span><span class="p">(</span><span class="n">state</span><span class="p">):</span>
     <span class="n">device</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">device</span>
     <span class="n">N</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;wall_tiles&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span>
     <span class="n">_</span><span class="p">,</span> <span class="n">G</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;ghost_pos&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span>
@@ -344,7 +342,7 @@
     <span class="k">return</span> <span class="n">TensorDict</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">state</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
 
 
-<span class="k">def</span> <span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="n">batch_size</span> <span class="o">=</span> <span class="n">tensordict</span><span class="o">.</span><span class="n">shape</span> <span class="k">if</span> <span class="n">tensordict</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span>
     <span class="k">if</span> <span class="n">tensordict</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">tensordict</span><span class="o">.</span><span class="n">is_empty</span><span class="p">():</span>
         <span class="n">tensordict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gen_params</span><span class="p">(</span><span class="n">batch_size</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
@@ -358,7 +356,7 @@
 
 <div class="viewcode-block" id="gen_params">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.gen_params">[docs]</a>
-<span class="k">def</span> <span class="nf">gen_params</span><span class="p">(</span><span class="n">batch_size</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">gen_params</span><span class="p">(</span><span class="n">batch_size</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 
 <span class="sd">    To change the layout of the gridworld, change these parameters</span>
@@ -490,7 +488,7 @@
 
 
 
-<span class="k">def</span> <span class="nf">_make_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td_params</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_make_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td_params</span><span class="p">):</span>
     <span class="n">batch_size</span> <span class="o">=</span> <span class="n">td_params</span><span class="o">.</span><span class="n">shape</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">observation_spec</span> <span class="o">=</span> <span class="n">CompositeSpec</span><span class="p">(</span>
         <span class="n">t</span><span class="o">=</span><span class="n">UnboundedDiscreteTensorSpec</span><span class="p">(</span>
@@ -576,21 +574,21 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">reward_spec</span> <span class="o">=</span> <span class="n">UnboundedContinuousTensorSpec</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">Size</span><span class="p">((</span><span class="o">*</span><span class="n">batch_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
 
 
-<span class="k">def</span> <span class="nf">_set_seed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seed</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_set_seed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seed</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]):</span>
     <span class="n">rng</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">rng</span> <span class="o">=</span> <span class="n">rng</span>
 
 
 <div class="viewcode-block" id="SuperPacman">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.SuperPacman">[docs]</a>
-<span class="k">class</span> <span class="nc">SuperPacman</span><span class="p">(</span><span class="n">EnvBase</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SuperPacman</span><span class="p">(</span><span class="n">EnvBase</span><span class="p">):</span>
     <span class="n">metadata</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s2">&quot;render_modes&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;human&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">],</span>
         <span class="s2">&quot;render_fps&quot;</span><span class="p">:</span> <span class="mi">30</span>
     <span class="p">}</span>
     <span class="n">batch_locked</span> <span class="o">=</span> <span class="kc">False</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td_params</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td_params</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">td_params</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">td_params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gen_params</span><span class="p">(</span><span class="n">batch_size</span><span class="p">)</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">)</span>
@@ -606,8 +604,8 @@
 
 <div class="viewcode-block" id="CenterPlayerTransform">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.CenterPlayerTransform">[docs]</a>
-<span class="k">class</span> <span class="nc">CenterPlayerTransform</span><span class="p">(</span><span class="n">ObservationTransform</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_keys</span><span class="p">,</span> <span class="n">out_keys</span><span class="p">,</span> <span class="n">patch_radius</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">fill_value</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CenterPlayerTransform</span><span class="p">(</span><span class="n">ObservationTransform</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_keys</span><span class="p">,</span> <span class="n">out_keys</span><span class="p">,</span> <span class="n">patch_radius</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">fill_value</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Centers the view on the player location</span>
 
@@ -625,14 +623,14 @@
 
 <div class="viewcode-block" id="CenterPlayerTransform.forward">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.CenterPlayerTransform.forward">[docs]</a>
-    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_call</span><span class="p">(</span><span class="n">tensordict</span><span class="p">)</span></div>
 
 
-    <span class="k">def</span> <span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">,</span> <span class="n">tensordict_reset</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">,</span> <span class="n">tensordict_reset</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_call</span><span class="p">(</span><span class="n">tensordict_reset</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">in_key</span><span class="p">,</span> <span class="n">out_key</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_keys</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">out_keys</span><span class="p">):</span>
             <span class="n">in_image</span> <span class="o">=</span> <span class="n">td</span><span class="p">[</span><span class="n">in_key</span><span class="p">]</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">td</span><span class="p">[</span><span class="n">in_key</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span> <span class="k">else</span> <span class="n">td</span><span class="p">[</span><span class="n">in_key</span><span class="p">]</span>
             <span class="n">N</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">in_image</span><span class="o">.</span><span class="n">shape</span>
@@ -668,7 +666,7 @@
 <div class="viewcode-block" id="CenterPlayerTransform.transform_observation_spec">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.CenterPlayerTransform.transform_observation_spec">[docs]</a>
     <span class="nd">@_apply_to_composite</span>
-    <span class="k">def</span> <span class="nf">transform_observation_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_spec</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transform_observation_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_spec</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">observation_spec</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
             <span class="n">N</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">observation_spec</span><span class="o">.</span><span class="n">shape</span>
             <span class="k">return</span> <span class="n">UnboundedContinuousTensorSpec</span><span class="p">(</span>
@@ -691,25 +689,25 @@
 
 <div class="viewcode-block" id="RGBPartialObsTransform">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.RGBPartialObsTransform">[docs]</a>
-<span class="k">class</span> <span class="nc">RGBPartialObsTransform</span><span class="p">(</span><span class="n">ObservationTransform</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">RGBPartialObsTransform</span><span class="p">(</span><span class="n">ObservationTransform</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Converts the state to a N, 3, H, W uint8 image tensor</span>
 <span class="sd">    Adds it to the tensordict under the key [image]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">in_keys</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;ego_wall_tiles&#39;</span><span class="p">],</span> <span class="n">out_keys</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;ego_pixels&#39;</span><span class="p">])</span>
 
 <div class="viewcode-block" id="RGBPartialObsTransform.forward">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.RGBPartialObsTransform.forward">[docs]</a>
-    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_call</span><span class="p">(</span><span class="n">tensordict</span><span class="p">)</span></div>
 
 
-    <span class="k">def</span> <span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">,</span> <span class="n">tensordict_reset</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">,</span> <span class="n">tensordict_reset</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_call</span><span class="p">(</span><span class="n">tensordict_reset</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td</span><span class="p">):</span>
         <span class="n">walls</span> <span class="o">=</span> <span class="n">td</span><span class="p">[</span><span class="s1">&#39;ego_wall_tiles&#39;</span><span class="p">]</span>
         <span class="n">device</span> <span class="o">=</span> <span class="n">walls</span><span class="o">.</span><span class="n">device</span>
         <span class="n">shape</span> <span class="o">=</span> <span class="o">*</span><span class="n">walls</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="mi">3</span>
@@ -731,7 +729,7 @@
 <div class="viewcode-block" id="RGBPartialObsTransform.transform_observation_spec">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.RGBPartialObsTransform.transform_observation_spec">[docs]</a>
     <span class="nd">@_apply_to_composite</span>
-    <span class="k">def</span> <span class="nf">transform_observation_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_spec</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transform_observation_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_spec</span><span class="p">):</span>
         <span class="n">N</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">observation_spec</span><span class="o">.</span><span class="n">shape</span>
         <span class="k">return</span> <span class="n">BoundedTensorSpec</span><span class="p">(</span>
             <span class="n">minimum</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
@@ -746,25 +744,25 @@
 
 <div class="viewcode-block" id="RGBFullObsTransform">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.RGBFullObsTransform">[docs]</a>
-<span class="k">class</span> <span class="nc">RGBFullObsTransform</span><span class="p">(</span><span class="n">ObservationTransform</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">RGBFullObsTransform</span><span class="p">(</span><span class="n">ObservationTransform</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Converts the state to a N, 3, H, W uint8 image tensor</span>
 <span class="sd">    Adds it to the tensordict under the key [image]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">in_keys</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;wall_tiles&#39;</span><span class="p">],</span> <span class="n">out_keys</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;pixels&#39;</span><span class="p">])</span>
 
 <div class="viewcode-block" id="RGBFullObsTransform.forward">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.RGBFullObsTransform.forward">[docs]</a>
-    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_call</span><span class="p">(</span><span class="n">tensordict</span><span class="p">)</span></div>
 
 
-    <span class="k">def</span> <span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">,</span> <span class="n">tensordict_reset</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">,</span> <span class="n">tensordict_reset</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_call</span><span class="p">(</span><span class="n">tensordict_reset</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td</span><span class="p">):</span>
         <span class="n">device</span> <span class="o">=</span> <span class="n">td</span><span class="p">[</span><span class="s1">&#39;wall_tiles&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">device</span>
         <span class="n">shape</span> <span class="o">=</span> <span class="o">*</span><span class="n">td</span><span class="p">[</span><span class="s1">&#39;wall_tiles&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="mi">3</span>
         <span class="n">td</span><span class="p">[</span><span class="s1">&#39;pixels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">uint8</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
@@ -783,7 +781,7 @@
 <div class="viewcode-block" id="RGBFullObsTransform.transform_observation_spec">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.RGBFullObsTransform.transform_observation_spec">[docs]</a>
     <span class="nd">@_apply_to_composite</span>
-    <span class="k">def</span> <span class="nf">transform_observation_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_spec</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transform_observation_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_spec</span><span class="p">):</span>
         <span class="n">N</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">observation_spec</span><span class="o">.</span><span class="n">shape</span>
         <span class="k">return</span> <span class="n">BoundedTensorSpec</span><span class="p">(</span>
             <span class="n">minimum</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
@@ -798,33 +796,33 @@
 
 <div class="viewcode-block" id="FlatTileTransform">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.FlatTileTransform">[docs]</a>
-<span class="k">class</span> <span class="nc">FlatTileTransform</span><span class="p">(</span><span class="n">ObservationTransform</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">FlatTileTransform</span><span class="p">(</span><span class="n">ObservationTransform</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    takes all the input keys and outputs a single flat tensor</span>
 <span class="sd">    in_keys: tensors to use</span>
 <span class="sd">    out_keys: name of flat tensor, defautls to flat_obs</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_keys</span><span class="p">,</span> <span class="n">out_key</span><span class="o">=</span><span class="s1">&#39;flat_obs&#39;</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_keys</span><span class="p">,</span> <span class="n">out_key</span><span class="o">=</span><span class="s1">&#39;flat_obs&#39;</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">in_keys</span><span class="o">=</span><span class="n">in_keys</span><span class="p">,</span> <span class="n">out_keys</span><span class="o">=</span><span class="n">out_key</span><span class="p">)</span>
 
 <div class="viewcode-block" id="FlatTileTransform.forward">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.FlatTileTransform.forward">[docs]</a>
-    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_call</span><span class="p">(</span><span class="n">tensordict</span><span class="p">)</span></div>
 
 
-    <span class="k">def</span> <span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">,</span> <span class="n">tensordict_reset</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">,</span> <span class="n">tensordict_reset</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_call</span><span class="p">(</span><span class="n">tensordict_reset</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td</span><span class="p">):</span>
         <span class="n">td</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">out_keys</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">td</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="n">start_dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_keys</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">td</span>
 
 <div class="viewcode-block" id="FlatTileTransform.transform_observation_spec">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.FlatTileTransform.transform_observation_spec">[docs]</a>
     <span class="nd">@_apply_to_composite</span>
-    <span class="k">def</span> <span class="nf">transform_observation_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_spec</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transform_observation_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_spec</span><span class="p">):</span>
         <span class="n">N</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">observation_spec</span><span class="o">.</span><span class="n">shape</span>
         <span class="n">S</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_keys</span><span class="p">:</span>
@@ -842,33 +840,33 @@
 
 <div class="viewcode-block" id="StackTileTransform">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.StackTileTransform">[docs]</a>
-<span class="k">class</span> <span class="nc">StackTileTransform</span><span class="p">(</span><span class="n">ObservationTransform</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">StackTileTransform</span><span class="p">(</span><span class="n">ObservationTransform</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    stacks all the in_keys into an N, C, H, W tensor and outputs it under the out_key</span>
 <span class="sd">    in_keys: must be N, H, W</span>
 <span class="sd">    out_key: string, default &quot;image&quot;</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_keys</span><span class="p">,</span> <span class="n">out_key</span><span class="o">=</span><span class="s1">&#39;image&#39;</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_keys</span><span class="p">,</span> <span class="n">out_key</span><span class="o">=</span><span class="s1">&#39;image&#39;</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">in_keys</span><span class="o">=</span><span class="n">in_keys</span><span class="p">,</span> <span class="n">out_keys</span><span class="o">=</span><span class="n">out_key</span><span class="p">)</span>
 
 <div class="viewcode-block" id="StackTileTransform.forward">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.StackTileTransform.forward">[docs]</a>
-    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_call</span><span class="p">(</span><span class="n">tensordict</span><span class="p">)</span></div>
 
 
-    <span class="k">def</span> <span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">,</span> <span class="n">tensordict_reset</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">,</span> <span class="n">tensordict_reset</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_call</span><span class="p">(</span><span class="n">tensordict_reset</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td</span><span class="p">):</span>
         <span class="n">td</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">out_keys</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">td</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_keys</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">3</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">td</span>
 
 <div class="viewcode-block" id="StackTileTransform.transform_observation_spec">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.StackTileTransform.transform_observation_spec">[docs]</a>
     <span class="nd">@_apply_to_composite</span>
-    <span class="k">def</span> <span class="nf">transform_observation_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_spec</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transform_observation_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_spec</span><span class="p">):</span>
         <span class="n">N</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">observation_spec</span><span class="o">.</span><span class="n">shape</span>
         <span class="n">C</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_keys</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">UnboundedContinuousTensorSpec</span><span class="p">(</span>
@@ -882,14 +880,14 @@
 
 <div class="viewcode-block" id="DistanceTransform">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.DistanceTransform">[docs]</a>
-<span class="k">class</span> <span class="nc">DistanceTransform</span><span class="p">(</span><span class="n">ObservationTransform</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">DistanceTransform</span><span class="p">(</span><span class="n">ObservationTransform</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    manhattan distance transform from a 2d image</span>
 <span class="sd">    The image must be binary, meaning only zeroes and ones in the image</span>
 <span class="sd">    uses kornia.contrib distance_transform, which returns the manhattan distance</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_keys</span><span class="p">,</span> <span class="n">out_keys</span><span class="p">,</span> <span class="n">normalize</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">h</span><span class="o">=</span><span class="mf">0.35</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_keys</span><span class="p">,</span> <span class="n">out_keys</span><span class="p">,</span> <span class="n">normalize</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">h</span><span class="o">=</span><span class="mf">0.35</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 
 <span class="sd">        Args:</span>
@@ -907,14 +905,14 @@
 
 <div class="viewcode-block" id="DistanceTransform.forward">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.DistanceTransform.forward">[docs]</a>
-    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_call</span><span class="p">(</span><span class="n">tensordict</span><span class="p">)</span></div>
 
 
-    <span class="k">def</span> <span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">,</span> <span class="n">tensordict_reset</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tensordict</span><span class="p">,</span> <span class="n">tensordict_reset</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_call</span><span class="p">(</span><span class="n">tensordict_reset</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">td</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">in_key</span><span class="p">,</span> <span class="n">out_key</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_keys</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">out_keys</span><span class="p">):</span>
             <span class="n">in_image</span> <span class="o">=</span> <span class="n">td</span><span class="p">[</span><span class="n">in_key</span><span class="p">]</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">td</span><span class="p">[</span><span class="n">in_key</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span> <span class="k">else</span> <span class="n">td</span><span class="p">[</span><span class="n">in_key</span><span class="p">]</span>
             <span class="n">N</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">in_image</span><span class="o">.</span><span class="n">shape</span>
@@ -929,7 +927,7 @@
 <div class="viewcode-block" id="DistanceTransform.transform_observation_spec">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.DistanceTransform.transform_observation_spec">[docs]</a>
     <span class="nd">@_apply_to_composite</span>
-    <span class="k">def</span> <span class="nf">transform_observation_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_spec</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transform_observation_spec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_spec</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">UnboundedContinuousTensorSpec</span><span class="p">(</span>
             <span class="n">shape</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">Size</span><span class="p">(</span><span class="n">observation_spec</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span>
             <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
@@ -941,7 +939,7 @@
 
 <div class="viewcode-block" id="has_transform">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.has_transform">[docs]</a>
-<span class="k">def</span> <span class="nf">has_transform</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="n">transform_class</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">has_transform</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="n">transform_class</span><span class="p">):</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="n">TransformedEnv</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">transform</span> <span class="ow">in</span> <span class="n">env</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">transforms</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">transform</span><span class="p">,</span> <span class="n">transform_class</span><span class="p">):</span>
@@ -952,7 +950,7 @@
 
 <div class="viewcode-block" id="make_env">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.superpacman.make_env">[docs]</a>
-<span class="k">def</span> <span class="nf">make_env</span><span class="p">(</span><span class="n">env_batch_size</span><span class="p">,</span> <span class="n">obs_keys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cpu&#39;</span><span class="p">,</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">make_env</span><span class="p">(</span><span class="n">env_batch_size</span><span class="p">,</span> <span class="n">obs_keys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cpu&#39;</span><span class="p">,</span>
              <span class="n">ego_patch_radius</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">log_video</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">log_stats</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
              <span class="n">logger</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_steps</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>

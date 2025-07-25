@@ -1,22 +1,20 @@
+
+
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" data-content_root="../../">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>superpacman.train_ppo &mdash; superpacman 0.1.a12 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
-      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
 
   
-  <!--[if lt IE 9]>
-    <script src="../../_static/js/html5shiv.min.js"></script>
-  <![endif]-->
-  
-        <script src="../../_static/jquery.js?v=5d32c60e"></script>
-        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="../../_static/documentation_options.js?v=c3b1149d"></script>
-        <script src="../../_static/doctools.js?v=9a2dae69"></script>
-        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=c3b1149d"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" /> 
@@ -71,35 +69,35 @@
            <div itemprop="articleBody">
              
   <h1>Source code for superpacman.train_ppo</h1><div class="highlight"><pre>
-<span></span><span class="kn">from</span> <span class="nn">superpacman</span> <span class="kn">import</span> <span class="n">make_env</span>
-<span class="kn">import</span> <span class="nn">tqdm</span>
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
-<span class="kn">from</span> <span class="nn">torch.optim</span> <span class="kn">import</span> <span class="n">Adam</span>
-<span class="kn">from</span> <span class="nn">torch.optim.lr_scheduler</span> <span class="kn">import</span> <span class="n">LambdaLR</span>
-<span class="kn">from</span> <span class="nn">tensordict.nn</span> <span class="kn">import</span> <span class="n">TensorDictModule</span>
-<span class="kn">from</span> <span class="nn">torch.distributions</span> <span class="kn">import</span> <span class="n">Categorical</span>
-<span class="kn">from</span> <span class="nn">torch.nn.functional</span> <span class="kn">import</span> <span class="n">log_softmax</span>
-<span class="kn">from</span> <span class="nn">torchrl.modules</span> <span class="kn">import</span> <span class="n">ProbabilisticActor</span><span class="p">,</span> <span class="n">ValueOperator</span>
-<span class="kn">from</span> <span class="nn">torchrl.collectors</span> <span class="kn">import</span> <span class="n">SyncDataCollector</span>
-<span class="kn">from</span> <span class="nn">torchrl.objectives</span> <span class="kn">import</span> <span class="n">ClipPPOLoss</span>
-<span class="kn">from</span> <span class="nn">torchrl.objectives.value</span> <span class="kn">import</span> <span class="n">GAE</span>
-<span class="kn">from</span> <span class="nn">torchrl.envs.utils</span> <span class="kn">import</span> <span class="n">check_env_specs</span><span class="p">,</span> <span class="n">ExplorationType</span><span class="p">,</span> <span class="n">set_exploration_type</span>
-<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
-<span class="kn">from</span> <span class="nn">time</span> <span class="kn">import</span> <span class="n">time</span>
-<span class="kn">from</span> <span class="nn">warnings</span> <span class="kn">import</span> <span class="n">warn</span>
-<span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="n">inf</span>
-<span class="kn">from</span> <span class="nn">torchrl.record.loggers</span> <span class="kn">import</span> <span class="n">get_logger</span><span class="p">,</span> <span class="n">generate_exp_name</span>
-<span class="kn">from</span> <span class="nn">torchrl.record</span> <span class="kn">import</span> <span class="n">CSVLogger</span>
-<span class="kn">from</span> <span class="nn">importlib.metadata</span> <span class="kn">import</span> <span class="n">version</span><span class="p">,</span> <span class="n">PackageNotFoundError</span>
-<span class="kn">from</span> <span class="nn">hrid</span> <span class="kn">import</span> <span class="n">HRID</span>
-<span class="kn">from</span> <span class="nn">statistics</span> <span class="kn">import</span> <span class="n">mean</span><span class="p">,</span> <span class="n">stdev</span>
+<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">superpacman</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_env</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tqdm</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch.optim</span><span class="w"> </span><span class="kn">import</span> <span class="n">Adam</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch.optim.lr_scheduler</span><span class="w"> </span><span class="kn">import</span> <span class="n">LambdaLR</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tensordict.nn</span><span class="w"> </span><span class="kn">import</span> <span class="n">TensorDictModule</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch.distributions</span><span class="w"> </span><span class="kn">import</span> <span class="n">Categorical</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="kn">import</span> <span class="n">log_softmax</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchrl.modules</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProbabilisticActor</span><span class="p">,</span> <span class="n">ValueOperator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchrl.collectors</span><span class="w"> </span><span class="kn">import</span> <span class="n">SyncDataCollector</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchrl.objectives</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClipPPOLoss</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchrl.objectives.value</span><span class="w"> </span><span class="kn">import</span> <span class="n">GAE</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchrl.envs.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">check_env_specs</span><span class="p">,</span> <span class="n">ExplorationType</span><span class="p">,</span> <span class="n">set_exploration_type</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">time</span><span class="w"> </span><span class="kn">import</span> <span class="n">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">warnings</span><span class="w"> </span><span class="kn">import</span> <span class="n">warn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">math</span><span class="w"> </span><span class="kn">import</span> <span class="n">inf</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchrl.record.loggers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span><span class="p">,</span> <span class="n">generate_exp_name</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchrl.record</span><span class="w"> </span><span class="kn">import</span> <span class="n">CSVLogger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">importlib.metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">version</span><span class="p">,</span> <span class="n">PackageNotFoundError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">hrid</span><span class="w"> </span><span class="kn">import</span> <span class="n">HRID</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">statistics</span><span class="w"> </span><span class="kn">import</span> <span class="n">mean</span><span class="p">,</span> <span class="n">stdev</span>
 
 
 <div class="viewcode-block" id="VGGConvBlock">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.train_ppo.VGGConvBlock">[docs]</a>
-<span class="k">class</span> <span class="nc">VGGConvBlock</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_channels</span><span class="p">,</span> <span class="n">batchnorm_momentum</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">VGGConvBlock</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_channels</span><span class="p">,</span> <span class="n">batchnorm_momentum</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">layers</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
             <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="n">in_channels</span><span class="p">,</span> <span class="n">out_channels</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
@@ -114,7 +112,7 @@
 
 <div class="viewcode-block" id="VGGConvBlock.forward">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.train_ppo.VGGConvBlock.forward">[docs]</a>
-    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>
             <span class="n">N</span><span class="p">,</span> <span class="n">L</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span>
             <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
@@ -129,12 +127,12 @@
 
 <div class="viewcode-block" id="Value">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.train_ppo.Value">[docs]</a>
-<span class="k">class</span> <span class="nc">Value</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Value</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    MLP value function</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_features</span><span class="p">,</span> <span class="n">in_channels</span><span class="p">,</span> <span class="n">hidden_dim</span><span class="p">,</span> <span class="n">batchnorm_momentum</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_features</span><span class="p">,</span> <span class="n">in_channels</span><span class="p">,</span> <span class="n">hidden_dim</span><span class="p">,</span> <span class="n">batchnorm_momentum</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">net</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
             <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">in_features</span><span class="o">=</span><span class="n">in_features</span> <span class="o">+</span> <span class="mi">1024</span><span class="p">,</span> <span class="n">out_features</span><span class="o">=</span><span class="n">hidden_dim</span><span class="p">),</span>
@@ -146,7 +144,7 @@
 
 <div class="viewcode-block" id="Value.forward">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.train_ppo.Value.forward">[docs]</a>
-    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flat_obs</span><span class="p">,</span> <span class="n">image</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flat_obs</span><span class="p">,</span> <span class="n">image</span><span class="p">):</span>
         <span class="n">conv_values</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">convblock</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
         <span class="n">features</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">flat_obs</span><span class="p">,</span> <span class="n">conv_values</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="o">-</span><span class="mi">3</span><span class="p">)],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
         <span class="n">shape</span> <span class="o">=</span> <span class="n">features</span><span class="o">.</span><span class="n">shape</span>
@@ -162,12 +160,12 @@
 
 <div class="viewcode-block" id="Policy">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.train_ppo.Policy">[docs]</a>
-<span class="k">class</span> <span class="nc">Policy</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Policy</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Policy network for flat observation</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_features</span><span class="p">,</span> <span class="n">in_channels</span><span class="p">,</span> <span class="n">hidden_dim</span><span class="p">,</span> <span class="n">actions_n</span><span class="p">,</span> <span class="n">batchnorm_momentum</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_features</span><span class="p">,</span> <span class="n">in_channels</span><span class="p">,</span> <span class="n">hidden_dim</span><span class="p">,</span> <span class="n">actions_n</span><span class="p">,</span> <span class="n">batchnorm_momentum</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">net</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
             <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">in_features</span><span class="o">=</span><span class="n">in_features</span> <span class="o">+</span> <span class="mi">1024</span><span class="p">,</span> <span class="n">out_features</span><span class="o">=</span><span class="n">hidden_dim</span><span class="p">),</span>
@@ -179,7 +177,7 @@
 
 <div class="viewcode-block" id="Policy.forward">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.train_ppo.Policy.forward">[docs]</a>
-    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flat_obs</span><span class="p">,</span> <span class="n">image</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flat_obs</span><span class="p">,</span> <span class="n">image</span><span class="p">):</span>
         <span class="n">conv_values</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">convblock</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
         <span class="n">features</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">flat_obs</span><span class="p">,</span> <span class="n">conv_values</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="o">-</span><span class="mi">3</span><span class="p">)],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
         <span class="n">shape</span> <span class="o">=</span> <span class="n">features</span><span class="o">.</span><span class="n">shape</span>
@@ -199,7 +197,7 @@
 
 <div class="viewcode-block" id="make_policy_module">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.train_ppo.make_policy_module">[docs]</a>
-<span class="k">def</span> <span class="nf">make_policy_module</span><span class="p">(</span><span class="n">policy_net</span><span class="p">,</span> <span class="n">in_keys</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">make_policy_module</span><span class="p">(</span><span class="n">policy_net</span><span class="p">,</span> <span class="n">in_keys</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
     <span class="n">in_keys</span> <span class="o">=</span> <span class="p">[</span><span class="n">in_keys</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">in_keys</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">in_keys</span>
     <span class="n">policy_module</span> <span class="o">=</span> <span class="n">TensorDictModule</span><span class="p">(</span>
         <span class="n">policy_net</span><span class="p">,</span>
@@ -222,7 +220,7 @@
 
 <div class="viewcode-block" id="train">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.train_ppo.train">[docs]</a>
-<span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">train</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Optimize the agent using Proximal Policy Optimization (Actor - Critic)</span>
 <span class="sd">    the Generalized Advantage Estimation module is used to compute Advantage</span>
@@ -302,7 +300,7 @@
 
     <span class="n">optim</span> <span class="o">=</span> <span class="n">Adam</span><span class="p">(</span><span class="n">loss_module</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">lr</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">warmup</span><span class="p">(</span><span class="n">current_step</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">warmup</span><span class="p">(</span><span class="n">current_step</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">current_step</span> <span class="o">&lt;</span> <span class="n">args</span><span class="o">.</span><span class="n">warmup_steps</span><span class="p">:</span>
             <span class="k">return</span> <span class="mf">0.</span>
         <span class="k">else</span><span class="p">:</span>
@@ -310,7 +308,7 @@
 
     <span class="n">scheduler</span> <span class="o">=</span> <span class="n">LambdaLR</span><span class="p">(</span><span class="n">optim</span><span class="p">,</span> <span class="n">lr_lambda</span><span class="o">=</span><span class="n">warmup</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">save_checkpoint</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">save_checkpoint</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
         <span class="n">Path</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="n">torch</span><span class="o">.</span><span class="n">save</span><span class="p">({</span>
             <span class="s2">&quot;value_net_state_dict&quot;</span><span class="p">:</span> <span class="n">value_net</span><span class="o">.</span><span class="n">state_dict</span><span class="p">(),</span>
@@ -321,7 +319,7 @@
             <span class="s2">&quot;hidden_dim&quot;</span><span class="p">:</span> <span class="n">args</span><span class="o">.</span><span class="n">hidden_dim</span>
         <span class="p">},</span> <span class="n">filename</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">load_checkpoint</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">load_checkpoint</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
         <span class="n">chkpt</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
         <span class="n">power</span><span class="p">,</span> <span class="n">hidden_dim</span> <span class="o">=</span> <span class="n">chkpt</span><span class="p">[</span><span class="s2">&quot;power&quot;</span><span class="p">],</span> <span class="n">chkpt</span><span class="p">[</span><span class="s2">&quot;hidden_dim&quot;</span><span class="p">]</span>
         <span class="k">assert</span> <span class="n">chkpt</span><span class="p">[</span><span class="s2">&quot;power&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">args</span><span class="o">.</span><span class="n">power</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;set --power flag to --power </span><span class="si">{</span><span class="n">power</span><span class="si">}</span><span class="s2">&quot;</span>
@@ -334,7 +332,7 @@
     <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">load_checkpoint</span><span class="p">:</span>
         <span class="n">load_checkpoint</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">load_checkpoint</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">log_episode_stats</span><span class="p">(</span><span class="n">tensordict_data</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">prefix</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_episode_stats</span><span class="p">(</span><span class="n">tensordict_data</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">prefix</span><span class="p">):</span>
         <span class="n">terminal_values</span> <span class="o">=</span> <span class="n">tensordict_data</span><span class="p">[</span><span class="s1">&#39;next&#39;</span><span class="p">,</span> <span class="n">key</span><span class="p">][</span><span class="n">tensordict_data</span><span class="p">[</span><span class="s1">&#39;next&#39;</span><span class="p">,</span> <span class="s1">&#39;done&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
         <span class="n">value_mean</span><span class="p">,</span> <span class="n">value_max</span><span class="p">,</span> <span class="n">valu_std</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">terminal_values</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
@@ -372,7 +370,7 @@
         <span class="n">update_time</span> <span class="o">=</span> <span class="n">after_update</span> <span class="o">-</span> <span class="n">after_collect</span>
 
         <span class="c1"># and now for the logging</span>
-        <span class="k">def</span> <span class="nf">training_stats</span><span class="p">(</span><span class="n">state_dict</span><span class="p">,</span> <span class="n">loss_value</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">training_stats</span><span class="p">(</span><span class="n">state_dict</span><span class="p">,</span> <span class="n">loss_value</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 
             <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
                 <span class="n">prefix</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span> <span class="k">if</span> <span class="n">prefix</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_&quot;</span>
@@ -426,7 +424,7 @@
     <span class="n">pbar</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 
     <span class="c1"># once training is done, write a video of the best policy we found</span>
-    <span class="k">def</span> <span class="nf">best_checkpt</span><span class="p">(</span><span class="n">directory</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">best_checkpt</span><span class="p">(</span><span class="n">directory</span><span class="p">):</span>
         <span class="n">best_rew</span> <span class="o">=</span> <span class="o">-</span><span class="n">inf</span>
         <span class="n">best_chkpt</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">for</span> <span class="n">chkp</span> <span class="ow">in</span> <span class="n">Path</span><span class="p">(</span><span class="n">directory</span><span class="p">)</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;*.pt&#39;</span><span class="p">):</span>
@@ -450,7 +448,7 @@
 
 <div class="viewcode-block" id="rollout_checkpoint">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.train_ppo.rollout_checkpoint">[docs]</a>
-<span class="k">def</span> <span class="nf">rollout_checkpoint</span><span class="p">(</span><span class="n">checkpoint_filename</span><span class="p">,</span> <span class="n">suffix</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cpu&#39;</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="nb">len</span><span class="o">=</span><span class="mi">400</span><span class="p">,</span> <span class="n">max_steps_per_trajectory</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">rollout_checkpoint</span><span class="p">(</span><span class="n">checkpoint_filename</span><span class="p">,</span> <span class="n">suffix</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cpu&#39;</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="nb">len</span><span class="o">=</span><span class="mi">400</span><span class="p">,</span> <span class="n">max_steps_per_trajectory</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="k">with</span> <span class="n">set_exploration_type</span><span class="p">(</span><span class="n">ExplorationType</span><span class="o">.</span><span class="n">RANDOM</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
 
         <span class="n">recording_env</span> <span class="o">=</span> <span class="n">make_env</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="n">IN_KEYS</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">ego_patch_radius</span><span class="o">=</span><span class="n">EGO_PATCH_RADIUS</span><span class="p">,</span>
@@ -475,7 +473,7 @@
 
 <div class="viewcode-block" id="enjoy_checkpoint">
 <a class="viewcode-back" href="../../superpacman.html#superpacman.train_ppo.enjoy_checkpoint">[docs]</a>
-<span class="k">def</span> <span class="nf">enjoy_checkpoint</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">enjoy_checkpoint</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
     <span class="n">filename</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">)</span><span class="o">.</span><span class="n">name</span>
     <span class="n">logger</span> <span class="o">=</span> <span class="n">CSVLogger</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;./enjoy&#39;</span><span class="p">,</span> <span class="n">video_format</span><span class="o">=</span><span class="s1">&#39;mp4&#39;</span><span class="p">,</span> <span class="n">video_fps</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
     <span class="n">rollout_checkpoint</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="n">filename</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="n">logger</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">seed</span><span class="p">,</span>
