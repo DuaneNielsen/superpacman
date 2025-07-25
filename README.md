@@ -72,6 +72,22 @@ help with parameters
 ```commandline
 superpacman --help
 ```
+###  Basic use
+
+```python
+import torch
+import superpacman
+from superpacman import Actions
+
+batch_size = 2
+
+env = superpacman.make_env(batch_size)
+
+state = env.reset()
+state['action'] = torch.tensor([Actions.N, Actions.E])
+state = env.step(state)
+```
+
 
 ### Training and Logging
 
