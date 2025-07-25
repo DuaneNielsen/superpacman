@@ -11,7 +11,11 @@ A stateless, vectorized implementation of pacman, implemented in torchRL
 
 
 
-https://github.com/DuaneNielsen/superpacman/assets/11070508/6ede32de-1917-4702-bd38-0a5b978302d8
+
+https://github.com/DuaneNielsen/superpacman/assets/11070508/386f17ea-d2b6-46a8-896c-7826e55595b9
+
+
+
 
 
 
