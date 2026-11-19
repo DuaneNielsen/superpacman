@@ -264,7 +264,11 @@ def _reset(self, tensordict=None):
         reset_state = self.gen_params(batch_size).to(self.device)
         reset_mask = tensordict['_reset'].squeeze(-1)
         for key in reset_state.keys():
-            tensordict[key][reset_mask] = reset_state[key][reset_mask]
+            if key not in tensordict.keys():
+                # rollout hands over only the '_reset' flag; fill the state in for the reset envs
+                tensordict.set(key, reset_state[key])
+            else:
+                tensordict[key][reset_mask] = reset_state[key][reset_mask]
     return tensordict
 
 
@@ -695,19 +699,18 @@ class FlatTileTransform(ObservationTransform):
         td[self.out_keys[0]] = torch.cat([td[key].flatten(start_dim=1) for key in self.in_keys], dim=-1)
         return td
 
-    @_apply_to_composite
     def transform_observation_spec(self, observation_spec):
-        N, H, W = observation_spec.shape
-        S = 0
-        for key in self.in_keys:
-            S += prod(self.parent.full_observation_spec[key].shape[1:])
-        return BoundedTensorSpec(
+        # Many inputs -> one output, so torchrl's per-key _apply_to_composite zip does not apply here.
+        N = observation_spec[self.in_keys[0]].shape[0]
+        S = sum(prod(observation_spec[key].shape[1:]) for key in self.in_keys)
+        observation_spec[self.out_keys[0]] = BoundedTensorSpec(
             minimum=0,
             maximum=1,
             shape=torch.Size((N, S)),
-            dtype=observation_spec.dtype,
+            dtype=observation_spec[self.in_keys[0]].dtype,
             device=observation_spec.device
         )
+        return observation_spec
 
 
 class StackTileTransform(ObservationTransform):
@@ -730,15 +733,17 @@ class StackTileTransform(ObservationTransform):
         td[self.out_keys[0]] = torch.stack([td[key] for key in self.in_keys], dim=-3)
         return td
 
-    @_apply_to_composite
     def transform_observation_spec(self, observation_spec):
-        N, H, W = observation_spec.shape
+        # Many inputs -> one output, so torchrl's per-key _apply_to_composite zip does not apply here.
+        ref = observation_spec[self.in_keys[0]]
+        N, H, W = ref.shape
         C = len(self.in_keys)
-        return UnboundedContinuousTensorSpec(
+        observation_spec[self.out_keys[0]] = UnboundedContinuousTensorSpec(
             shape=torch.Size((N, C, H, W)),
-            dtype=observation_spec.dtype,
+            dtype=ref.dtype,
             device=observation_spec.device
         )
+        return observation_spec
 
 
 class DistanceTransform(ObservationTransform):
@@ -879,7 +884,9 @@ def make_env(env_batch_size, obs_keys=None, device='cpu',
         env.append_transform(PermuteTransform([-2, -1, -3], in_keys=['pixels'], out_keys=['pixels']))
         if logger is None:
             logger = CSVLogger(exp_name='superpacman', log_dir="../logs", video_fps=3, video_format='mp4')
-        recorder = VideoRecorder(logger=logger, tag='pacman', fps=3, skip=1)
+        # torchrl 0.7's VideoRecorder crashes when fps= is passed to the constructor, so set it after
+        recorder = VideoRecorder(logger=logger, tag='pacman', skip=1)
+        recorder.video_kwargs['fps'] = 3
         env.append_transform(recorder)
         env.video_recorder = recorder
 
